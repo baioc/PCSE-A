@@ -1,0 +1,35 @@
+STRUCTURES DE DONNÉES DU PROCESSEUR ET CARTE MÉMOIRE
+
+
+Les structures et adresses sont décrites dans l'ordre de leur initialisation et/ou utilisation dans le code fourni.
+
+1M : Adresse où est chargé le noyau.
+
+first_stack (dans .data, sur 16K) : la pile sur laquelle démarre le noyau.
+
+16M : Début de l'espace utilisateur. Le code utilisateur est chargé à cette adresse par le noyau dès le démarrage de ce dernier.
+
+gdt (adresse : 64K, sur 64K) : la table globale des descripteurs (GDT), voir doc Intel.
+Entrée 0 : vide (à 0, invalide).
+Entrée 1 : descripteur de la TSS utilisée en permanence par le kernel et le code utilisateur.
+Entrée 2 : descripteur du segment de code superviseur (couvre toute l'espace adressable), référencé par CS.
+Entrée 3 : descripteur du segment de données superviseur (couvre toute l'espace adressable), référencé par DS, ES, SS.
+Entrées 4 à 7 : vide (à 0, invalide).
+Entrée 8 : descripteur du segment de code utilisateur (couvre toute l'espace adressable).
+Entrée 9 : descripteur du segment de données utilisateur (couvre toute l'espace adressable).
+Entrées 10 à 41 : descripteurs des TSS associées à chacun des 32 vecteurs d'exception du processeur.
+Entrées suivantes : vides (à 0, invalides).
+
+Pas de LDT (table locale des descripteurs).
+
+trap_tss (dans .data, sur < 4K) : les 32 TSS associées aux 32 exceptions du processeur. Elles sont initialisées avec des tâches qui appellent le traitant d'exception, qui est le même pour toutes. Le code de ces tâches est dans "handlers.S".
+
+idt (adresse : 4K, sur 2K) : table d'interruptions. Les entrées 0 à 31 (vecteurs d'exception) sont des "task gate" vers les TSS précédemment initialisées. Les autres entrées sont vides (à 0, invalides).
+
+tss (adresse : 128K, sur 104 octets) : la TSS courante, pour stocker le contexte actuel lors du basculement vers une tâche de traitement d'exception. Elle contient aussi l'adresse de la pile superviseur du processus actuel.
+
+pgdir (dans .text) : le répertoire de pages. Cette structure permet de mettre en place une protection sur certaines zones de l'espace d'adressage. Ainsi, un accès entre les adresses 0 et 4K (au début de la mémoire) lèvera immédiatement une faute de page (exception 14). Ca permet de capturer les accès à la mémoire à travers un pointeur nul. De même, un accès à la zone réservée au noyau par le programme utilisateur provoquera également une faute de page. C'est une mesure de protection du noyau contre l'application. Dans notre cas, nous n'avons autorisé les programmes en mode utilisateur qu'à accéder aux adresses comprises entre 16M et 48M.
+
+40M : Début de la zone où sont allouées par le noyau les piles utilisateurs des processus.
+
+48M : Fin de l'espace utilisateur, et fin de la zone d'allocation des piles utilisateurs.
