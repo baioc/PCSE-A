@@ -14,7 +14,7 @@ else
     TOOLCHAIN_PREFIX=""
 fi
 
-if [ -x ${TOOLCHAIN_PREFIX}gcc ]; then
+if [ -x "${TOOLCHAIN_PREFIX}${CC:-"gcc"}" ]; then
     echo "TOOLCHAIN_PREFIX := ${TOOLCHAIN_PREFIX}"
 else
     echo "TOOLCHAIN_PREFIX :="

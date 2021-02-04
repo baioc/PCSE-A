@@ -1,4 +1,9 @@
-.PHONY: clean all
+.PHONY: clean all debug
+
+# Notify C compiler
+ifdef CC
+$(info Environment compiler: $(CC))
+endif
 
 # Output directory for each submakefiles
 OUTPUT := out
@@ -26,3 +31,6 @@ clean:
 	$(MAKE) clean -C kernel/
 	$(MAKE) clean -C user/
 
+debug: all
+	qemu-system-i386 -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
+	gdb --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "tbreak kernel_start"
