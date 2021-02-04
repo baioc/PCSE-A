@@ -128,7 +128,7 @@ void sys_info(void);
 typedef __SIZE_TYPE__ size_t;
 
 int strcmp(const char *str1, const char *str2);
-unsigned long strlen(const char *s);
+size_t strlen(const char *s);
 char *strncpy(char *dst, const char *src, unsigned n);
 void *memset(void *dst, int c, size_t n);
 
