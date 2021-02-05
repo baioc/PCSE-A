@@ -41,9 +41,9 @@ endif
 
 ### Tools flags ###
 DEFS   := -D__KERNEL__
-CFLAGS := -m32 \
+CFLAGS := -m32 -march=pentium \
 		  -Wall -Wextra -Werror -std=c99 \
-		  -g -gstabs \
+		  -g \
 		  -pipe \
 		  -nostdinc \
 		  -nostdlib \

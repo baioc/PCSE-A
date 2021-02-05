@@ -32,5 +32,5 @@ clean:
 	$(MAKE) clean -C user/
 
 debug: all
-	qemu-system-i386 -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
+	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
 	gdb --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
