@@ -1,10 +1,5 @@
 .PHONY: clean all debug
 
-# Notify C compiler
-ifdef CC
-$(info Environment compiler: $(CC))
-endif
-
 # Output directory for each submakefiles
 OUTPUT := out
 export OUTPUT

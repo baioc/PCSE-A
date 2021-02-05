@@ -22,8 +22,7 @@ endif
 
 ### Tools ###
 TOOLCHAIN_PREFIX ?=
-CC ?= gcc
-CC      := $(TOOLCHAIN_PREFIX)$(CC)
+CC      := $(TOOLCHAIN_PREFIX)gcc
 AS      := $(TOOLCHAIN_PREFIX)gcc
 LD      ?= $(TOOLCHAIN_PREFIX)ld
 AR      := $(TOOLCHAIN_PREFIX)ar

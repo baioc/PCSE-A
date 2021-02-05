@@ -1,8 +1,7 @@
 # Copyright (C) 2002 by Simon Nieuviarts
 FILES=keyboard.c scancode.c
 OBJS=$(notdir $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(FILES))))
-CC ?= gcc
-CC += -m32 -march=pentium
+CC=gcc -m32 -march=pentium
 AS=gcc -m32
 LD=ld -melf_i386
 DIRS=.
