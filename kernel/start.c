@@ -1,5 +1,7 @@
 #include "debugger.h"
 #include "cpu.h"
+#include "stdio.h"
+#include "console.h"
 
 int fact(int n)
 {
@@ -14,11 +16,12 @@ void kernel_start(void)
 {
 	int i;
 //	call_debugger();
-
 	i = 10;
 
 	i = fact(i);
+	console_putbytes("test", 4);
 
+	printf("\fHello world");
 	while(1)
 	  hlt();
 
