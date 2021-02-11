@@ -94,7 +94,7 @@ TESTS_DIR := tests
 include build/tests.mk
 
 ### Generate the kernel, ready to run ###
-kernel.bin: build/kernel.lds $(OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(TESTS_OBJS) $(APPS_OBJS) $(REAL_MODE_TARGET)
+kernel.bin: build/kernel.lds $(OBJS) $(TESTS_OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET) 
 	$(LD) $(LDFLAGS) -e entry -T$< $(filter-out %.lds, $^) -o $@
 
 ### insert the kernel in an iso file (cdrom) suitable for bochs and USB key

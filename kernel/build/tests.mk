@@ -36,14 +36,14 @@ endif
 # Standard build rules will be handle by generic rules in parent Makefile.
 # Just add a dependency to the build output directory
 # Added ../shared includes
-$(TESTS_DEPS): INCLUDES := $(TESTS_INC) -I../shared
+$(TESTS_DEPS): INCLUDES := $(TESTS_INC) -I../shared -I.
 $(TESTS_DEPS): | $(TESTS_OUT)
 
 ### Build rules ###
 # Standard build rules will be handle by generic rules in parent Makefile.
 # Just add a dependency to the build output directory
 # Added ../shared includes
-$(TESTS_OBJS): INCLUDES := $(TESTS_INC) -I../shared
+$(TESTS_OBJS): INCLUDES := $(TESTS_INC) -I../shared -I.
 $(TESTS_OBJS): | $(TESTS_OUT)
 
 $(TESTS_OUT):
