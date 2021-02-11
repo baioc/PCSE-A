@@ -3,6 +3,10 @@
 #include "stdio.h"
 #include "console.h"
 
+#ifdef KERNEL_TEST
+#include "kernel_tests.h"
+#endif
+
 int fact(int n)
 {
 	if (n < 2)
@@ -19,9 +23,15 @@ void kernel_start(void)
 	i = 10;
 
 	i = fact(i);
+
+#ifdef KERNEL_TEST
+    kernel_run_tests();
+#endif
+
 	console_putbytes("test", 4);
 
 	printf("\fHello world");
+
 	while(1)
 	  hlt();
 
