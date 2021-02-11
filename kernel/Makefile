@@ -63,7 +63,7 @@ DIRS := . boot
 SRC  :=	\
 	$(call all-asm-files-under, $(DIRS)) \
 	$(call all-c-files-under , $(DIRS))
-INCLUDES := $(addprefix -I, $(DIRS) ../shared)
+INCLUDES := $(addprefix -I, $(DIRS) ../shared ./tests)
 
 ### Output files ###
 DEPS        := $(addprefix $(OUTPUT)/, $(call generate-deps, $(SRC)))
@@ -88,9 +88,13 @@ include build/kbd-linux.mk
 ### Generate object files for userspace binaries ###
 include build/apps-integration.mk
 
+### Generate object files for kernel testing ###
+### Comment the two next lines if you want to skip tests building ###
+TESTS_DIR := tests
+include build/tests.mk
 
 ### Generate the kernel, ready to run ###
-kernel.bin: build/kernel.lds $(OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET)
+kernel.bin: build/kernel.lds $(OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(TESTS_OBJS) $(APPS_OBJS) $(REAL_MODE_TARGET)
 	$(LD) $(LDFLAGS) -e entry -T$< $(filter-out %.lds, $^) -o $@
 
 ### insert the kernel in an iso file (cdrom) suitable for bochs and USB key
@@ -159,4 +163,3 @@ $(OUTPUT):
 .PHONY: clean
 clean:
 	rm -rf $(OUTPUT) kernel.bin cdrom.iso
-
