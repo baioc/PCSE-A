@@ -21,12 +21,11 @@ endif
 
 
 ### Tools ###
-TOOLCHAIN_PREFIX ?=
-CC      := $(TOOLCHAIN_PREFIX)gcc
-AS      := $(TOOLCHAIN_PREFIX)gcc
-LD      ?= $(TOOLCHAIN_PREFIX)ld
-AR      := $(TOOLCHAIN_PREFIX)ar
-OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
+CC      := i386-pc-elf-gcc
+AS      := i386-pc-elf-gcc
+LD      := i386-pc-elf-ld
+AR      := i386-pc-elf-ar
+OBJCOPY := i386-pc-elf-objcopy
 DEPS    := $(CC)
 ECHO    ?= echo
 MKDIR   := mkdir
@@ -42,7 +41,7 @@ endif
 # Global compilation flags
 CFLAGS := -m32 -march=pentium \
 		  -Wall -Wextra -Werror -Wmissing-include-dirs -std=c99 \
-		  -g \
+		  -g -gstabs \
 		  -pipe \
 		  -nostdinc \
 		  -fno-pic \

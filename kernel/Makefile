@@ -18,13 +18,12 @@ endif
 
 
 ### Tools ###
-TOOLCHAIN_PREFIX ?=
-CC      := $(TOOLCHAIN_PREFIX)gcc
-AS      := $(TOOLCHAIN_PREFIX)gcc
-LD      ?= $(TOOLCHAIN_PREFIX)ld
-AR      := $(TOOLCHAIN_PREFIX)ar
-OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
-NM      := $(TOOLCHAIN_PREFIX)nm
+CC      := i386-pc-elf-gcc
+AS      := i386-pc-elf-gcc
+LD      := i386-pc-elf-ld
+AR      := i386-pc-elf-ar
+OBJCOPY := i386-pc-elf-objcopy
+NM      := i386-pc-elf-mn
 DEP     := $(CC)
 MKDIR   := mkdir
 CP      := cp
@@ -42,7 +41,7 @@ endif
 DEFS   := -D__KERNEL__
 CFLAGS := -m32 -march=pentium \
 		  -Wall -Wextra -Werror -std=c99 \
-		  -g \
+		  -g -gstabs \
 		  -pipe \
 		  -nostdinc \
 		  -nostdlib \
@@ -159,4 +158,3 @@ $(OUTPUT):
 .PHONY: clean
 clean:
 	rm -rf $(OUTPUT) kernel.bin cdrom.iso
-
