@@ -76,3 +76,5 @@ FUNCTION##_handler:                                                \
 	popl %eax;                                                     \
 	/* return from the interrupt handler */                        \
 	iret
+
+DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
