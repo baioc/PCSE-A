@@ -34,7 +34,7 @@ struct our_tty;
 
 /* Fix undeclared calls due to functions renaming and -Werror flag */
 #include "linux/types.h"
-ushort *keyboard_key_maps[];
+extern ushort *keyboard_key_maps[];
 
 #define kbd_leds		keyboard_pckbd_leds
 #define kbd_init_hw		keyboard_pckbd_init_hw

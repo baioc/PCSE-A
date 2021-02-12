@@ -24,7 +24,7 @@ AS      := i386-pc-elf-gcc
 LD      := i386-pc-elf-ld
 AR      := i386-pc-elf-ar
 OBJCOPY := i386-pc-elf-objcopy
-NM      := i386-pc-elf-mn
+NM      := i386-pc-elf-nm
 endif
 
 ### Tools ###

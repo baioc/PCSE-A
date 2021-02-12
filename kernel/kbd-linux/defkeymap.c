@@ -298,7 +298,7 @@ char *funcbufptr = func_buf;
 int funcbufsize = sizeof(func_buf);
 int funcbufleft = 0;          /* space left */
 
-char *keyboard_func_table[MAX_NR_FUNC] = {
+char *func_table[MAX_NR_FUNC] = {
 	func_buf + 0,
 	func_buf + 5,
 	func_buf + 10,
@@ -328,7 +328,7 @@ char *keyboard_func_table[MAX_NR_FUNC] = {
 	0,
 };
 
-struct kbdiacr keyboard_accent_table[MAX_DIACR] = {
+struct kbdiacr accent_table[MAX_DIACR] = {
 };
 
-unsigned int keyboard_accent_table_size = 0;
+unsigned int accent_table_size = 0;
