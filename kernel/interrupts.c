@@ -84,18 +84,13 @@ void mask_irq(int irq, bool mask)
 
   // mask/unmask requested bit in the interrupt register
   const uint8_t current_mask = inb(port);
-  if (mask)
-    outb(current_mask | (1 << irq), port);
-  else
-    outb(current_mask & ~(1 << irq), port);
+  outb(mask ? current_mask | (1 << irq) : current_mask & ~(1 << irq), port);
 }
 
 void acknowledge_interrupt(int irq)
 {
   // send EOI to one or both PIC chips
-  if (irq >= 8) {
-    outb(PIC_CMND_EOI, PIC_SLAVE_CMND_PORT);
-  }
+  if (irq >= 8) outb(PIC_CMND_EOI, PIC_SLAVE_CMND_PORT);
   outb(PIC_CMND_EOI, PIC_MASTER_CMND_PORT);
 }
 
