@@ -1,9 +1,26 @@
-AlignConsecutiveAssignments: true
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AlignConsecutiveMacros: true
-AlignEscapedNewlines: Left
+## Wishful thinking, but this would increase whitespace diffs
+# TabWidth: 4
+# UseTab: AlignWithSpaces
+
 AlignTrailingComments: true
-AllowAllArgumentsOnNextLine: true
+AlignEscapedNewlines: Left
+AlignAfterOpenBracket: Align
+BinPackParameters: true
 AllowAllParametersOfDeclarationOnNextLine: true
+BinPackArguments: true
+AllowAllArgumentsOnNextLine: true
+
+Language: Cpp
 PointerAlignment: Right
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterStruct: false
+  AfterUnion: false
+  AfterEnum: false
+  AfterControlStatement: MultiLine
+  AfterFunction: true
+IndentCaseLabels: false
+AlignConsecutiveMacros: true
+SortIncludes: false
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: false
