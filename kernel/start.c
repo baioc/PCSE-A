@@ -1,29 +1,38 @@
+#include "stdio.h"
 #include "debugger.h"
 #include "cpu.h"
-#include "stdio.h"
 #include "console.h"
-
-int fact(int n)
-{
-	if (n < 2)
-		return 1;
-
-	return n * fact(n-1);
-}
-
+#include "interrupts.h"
+#include "clock.h"
 
 void kernel_start(void)
 {
-	int i;
-//	call_debugger();
-	i = 10;
+  // initialize subsystems
+  printf("\f");
+  clock_init();
 
-	i = fact(i);
-	console_putbytes("test", 4);
+  // testing
+  int i = 42;
+  printf("Hello world\n");
+  printf("The answer is %d\n", i);
+  printf("\n");
+  // call_debugger();
 
-	printf("\fHello world");
-	while(1)
-	  hlt();
+  // enable interrupts and begin handler daemon
+  sti();
+  for (unsigned s = -1;;) {
+    hlt();
 
-	return;
+    unsigned seconds = current_clock() / CLOCKFREQ;
+    if (seconds == s) {
+      continue;
+    }
+    s = seconds;
+    unsigned minutes = seconds / 60;
+    seconds %= 60;
+    unsigned hours = minutes / 60;
+    minutes %= 60;
+    hours %= 24;
+    printf("%02u:%02u:%02u\n", hours, minutes, seconds);
+  }
 }
