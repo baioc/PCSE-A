@@ -18,7 +18,7 @@
  * `Sticky' modifier keys, 951006.
  *
  * 11-11-96: SAK should now work in the raw mode (Martin Mares)
- * 
+ *
  * Modified to provide 'generic' keyboard support by Hamish Macdonald
  * Merge with the m68k keyboard driver and split-off of the PC low-level
  * parts by Geert Uytterhoeven, May 1997
@@ -98,7 +98,7 @@ extern char kbd_unexpected_up(unsigned char keycode);
 #define keymap_count		keyboard_keymap_count
 #define plain_map		keyboard_plain_map
 #define shift_ctrl_map		keyboard_shift_ctrl_map
-#define shift_map		keyboard_shift_map 
+#define shift_map		keyboard_shift_map
 
 #define TTY_BREAK 1
 
@@ -160,9 +160,9 @@ static unsigned char k_down[NR_SHIFT];
 static unsigned long key_down[256/BITS_PER_LONG];
 
 static int dead_key_next;
-/* 
+/*
  * In order to retrieve the shift_state (for the mouse server), either
- * the variable must be global, or a new procedure must be created to 
+ * the variable must be global, or a new procedure must be created to
  * return the value. I chose the former way.
  */
 int shift_state;
@@ -489,7 +489,7 @@ static void lastcons(void)
 static void decr_console(void)
 {
 	int i;
- 
+
 	for (i = fg_console-1; i != fg_console; i--) {
 		if (i == -1)
 			i = MAX_NR_CONSOLES-1;
@@ -965,7 +965,7 @@ int __init kbd_init(void)
 	kbd0.slockstate = 0;
 	kbd0.modeflags = KBD_DEFMODE;
 	kbd0.kbdmode = VC_XLATE;
- 
+
 	for (i = 0 ; i < MAX_NR_CONSOLES ; i++)
 		kbd_table[i] = kbd0;
 
