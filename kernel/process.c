@@ -25,20 +25,25 @@
  * Types
  ******************************************************************************/
 
-enum process_state {
-  CHOSEN, // process currently running on processor
-  READY,  // process waiting for his turn
-  BLOCKED_ON_SEMAHPORE,
-  BLOCKED_ON_IO,
-  WAITING_FOR_CHILD,
-  SLEEPING,
-  ZOMBIE
-}
+typedef enum process_state {
+   CHOSEN, // process currently running on processor
+   READY,  // process waiting for his turn
+   BLOCKED_ON_SEMAHPORE,
+   BLOCKED_ON_IO,
+   WAITING_FOR_CHILD,
+   SLEEPING,
+   ZOMBIE
+ }
 
-struct process {
-  uint32_t pid;      // between 1 and NBPROC
-  uint32_t priority; // between 1 and MAXPRIO
-};
+ struct process {
+     uint32_t pid; // between 1 and NBPROC
+     uint32_t priority; // between 1 and MAXPRIO
+     char name[8];
+     process_state state;
+     uint32_t saveZone[5];
+     uint32_t stack[TAILLE_PILE];
+     int endormi;
+ };
 
 /*******************************************************************************
  * Internal function declaration
@@ -51,6 +56,14 @@ struct process {
 /*******************************************************************************
  * Public function
  ******************************************************************************/
+
+/*
+  Stocker les processus dans une liste chaînée
+*/
+
+int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg){
+
+}
 
 /*
  * Change priority of process referenced by pid to the value newprio

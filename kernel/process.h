@@ -27,7 +27,8 @@
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
-
+extern void ctx_sw(int saveZone1[5],int saveZone2[5]);
+int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg);
 /*
  * Change priority of process referenced by pid to the value newprio
  * If priority changed and the process was in a queue, it needs to be placed
