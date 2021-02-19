@@ -15,7 +15,10 @@
 /*******************************************************************************
  * Macros
  ******************************************************************************/
-
+ #define TAILLE_PILE 512
+ // TODO make sure that kernel will support 1000 processes by the end of project
+ #define NBPROC  30
+ #define MAXPRIO 256
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -29,20 +32,8 @@
  ******************************************************************************/
 extern void ctx_sw(int saveZone1[5],int saveZone2[5]);
 int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg);
-/*
- * Change priority of process referenced by pid to the value newprio
- * If priority changed and the process was in a queue, it needs to be placed
- * again in that queue depending on its new priority.
- * If the value of newprio is invalid, return value must be < 0. Otherwise, return
- * value is the previous priority of process
- */
 int chprio(int pid, int newprio);
-
-/*
-* If value of pid is invalid, return value must be < 0. Otherwise, return value
-* is the current priority of process referenced by pid
-*/
 int getprio(int pid);
-
+extern void ctx_sw(int saveZone1[5],int saveZone2[5]);
 
 #endif /* _process_H_ */

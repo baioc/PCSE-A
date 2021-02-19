@@ -10,22 +10,18 @@
  ******************************************************************************/
 
 #include "process.h"
-
+#include "../shared/queue.h"
 #include "stdint.h"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
-// TODO make sure that kernel will support 1000 processes by the end of project
-#define NBPROC  30
-#define MAXPRIO 256
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-typedef enum process_state {
+typedef enum _proc_state {
    CHOSEN, // process currently running on processor
    READY,  // process waiting for his turn
    BLOCKED_ON_SEMAHPORE,
@@ -33,36 +29,61 @@ typedef enum process_state {
    WAITING_FOR_CHILD,
    SLEEPING,
    ZOMBIE
- }
+ }proc_state;
 
- struct process {
+ struct _proc {
      uint32_t pid; // between 1 and NBPROC
      uint32_t priority; // between 1 and MAXPRIO
-     char name[8];
-     process_state state;
+     proc_state state;
      uint32_t saveZone[5];
      uint32_t stack[TAILLE_PILE];
-     int endormi;
+     const char *name;
+     void *arg;
+     link position; // useful for the list
  };
+ typedef struct _proc proc;
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
+link list_proc = LIST_HEAD_INIT(list_proc); // process list
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
+uint32_t nbr_proc = 0;
+
 /*******************************************************************************
  * Public function
  ******************************************************************************/
-
-/*
-  Stocker les processus dans une liste chaînée
-*/
+// test function for the first process
+ int tstA(void *arg){
+   uint32_t i;
+   printf(arg);
+   while(1){
+     printf("A");
+     for(i = 0; i < 5000000; i++);
+   }
+ }
 
 int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg){
-
+  if(nbr_proc == NBPROC){
+    return 1;
+  }
+  proc new_proc;
+  new_proc.pid = nbr_proc;
+  nbr_proc ++;
+  new_proc.priority = prio;
+  new_proc.stack[TAILLE_PILE-ssize] = (uint32_t)(pt_func);
+  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[TAILLE_PILE-ssize]));
+  //new_proc.stack[TAILLE_PILE-1] = (uint32_t)(pt_func);
+  new_proc.name = name;
+  new_proc.state = READY;
+  new_proc.arg = arg;
+  queue_add(&new_proc,&list_proc,proc,position,priority);
+  return 0;
 }
 
 /*
@@ -72,13 +93,13 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *nam
  * If the value of newprio is invalid, return value must be < 0. Otherwise,
  * return value is the previous priority of process
  */
-int chprio(int pid, int newprio) { return -1; }
+//int chprio(int pid, int newprio) { return -1; }
 
 /*
  * If value of pid is invalid, return value must be < 0. Otherwise, return value
  * is the current priority of process referenced by pid
  */
-int getprio(int pid) { return -1; }
+//int getprio(int pid) { return -1; }
 
 /*******************************************************************************
  * Internal function
