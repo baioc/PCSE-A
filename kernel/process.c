@@ -11,6 +11,7 @@
 
 #include "process.h"
 #include "../shared/queue.h"
+#include "../shared/malloc.c"
 #include "stdint.h"
 
 /*******************************************************************************
@@ -36,10 +37,12 @@ typedef enum _proc_state {
      uint32_t priority; // between 1 and MAXPRIO
      proc_state state;
      uint32_t saveZone[5];
-     uint32_t stack[TAILLE_PILE];
+     uint32_t ssize;
      const char *name;
      void *arg;
      link position; // useful for the list
+     //uint32_t stack[];
+     uint32_t stack[TAILLE_PILE];
  };
  typedef struct _proc proc;
 
@@ -58,6 +61,36 @@ uint32_t nbr_proc = 0;
 /*******************************************************************************
  * Public function
  ******************************************************************************/
+
+// test schedulding function
+void ord(){
+  if(nbr_proc > 1){
+    proc *pass = queue_out(&list_proc,proc,position); // process who will give the execution
+    proc *take = queue_top(&list_proc,proc,position); // process who will take the execution
+    pass->priority = MAXPRIO - nbr_proc;
+    pass->state = READY;
+    take->state = CHOSEN;
+    queue_add(pass,&list_proc,proc,position,priority);
+    ctx_sw((int*)pass->saveZone,(int*)take->saveZone);
+  }
+}
+
+int tstA2(){
+  while(1){
+    printf("A");
+    for(uint32_t i = 0; i < 5000000; i++);
+    ord();
+  }
+}
+
+int tstB2(){
+  while(1){
+    printf("B");
+    for(uint32_t i = 0; i < 5000000; i++);
+    ord();
+  }
+}
+
 // test function for the first process
  int tstA(void *arg){
    uint32_t i;
@@ -65,6 +98,17 @@ uint32_t nbr_proc = 0;
    while(1){
      printf("A");
      for(i = 0; i < 5000000; i++);
+     ord();
+   }
+ }
+
+ int tstB(void *arg){
+   uint32_t i;
+   printf(arg);
+   while(1){
+     printf("B");
+     for(i = 0; i < 5000000; i++);
+     ord();
    }
  }
 
@@ -76,9 +120,14 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *nam
   new_proc.pid = nbr_proc;
   nbr_proc ++;
   new_proc.priority = prio;
-  new_proc.stack[TAILLE_PILE-ssize] = (uint32_t)(pt_func);
-  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[TAILLE_PILE-ssize]));
-  //new_proc.stack[TAILLE_PILE-1] = (uint32_t)(pt_func);
+  new_proc.ssize = (uint32_t)ssize;
+  new_proc.stack[TAILLE_PILE-1] = (uint32_t)(pt_func);
+  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[TAILLE_PILE-1]));
+  /*
+  new_proc.stack = mem_alloc(ssize*sizeof(uint32_t));
+  new_proc.stack[ssize-1] = (uint32_t)(pt_func);
+  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[ssize-1]));
+  */
   new_proc.name = name;
   new_proc.state = READY;
   new_proc.arg = arg;

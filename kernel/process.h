@@ -34,6 +34,9 @@ extern void ctx_sw(int saveZone1[5],int saveZone2[5]);
 int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg);
 int chprio(int pid, int newprio);
 int getprio(int pid);
-extern void ctx_sw(int saveZone1[5],int saveZone2[5]);
+int tstA(void *arg);
+int tstB(void *arg);
+int tstA2();
+int tstB2();
 
 #endif /* _process_H_ */
