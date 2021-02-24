@@ -1,16 +1,13 @@
-## Wishful thinking, but this would increase whitespace diffs
-# TabWidth: 4
-# UseTab: AlignWithSpaces
+UseTab: AlignWithSpaces
 
 AlignTrailingComments: true
 AlignEscapedNewlines: Left
 AlignAfterOpenBracket: Align
 BinPackParameters: true
 AllowAllParametersOfDeclarationOnNextLine: true
-BinPackArguments: true
+BinPackArguments: false
 AllowAllArgumentsOnNextLine: true
 
-Language: Cpp
 PointerAlignment: Right
 BreakBeforeBraces: Custom
 BraceWrapping:
@@ -24,3 +21,5 @@ AlignConsecutiveMacros: true
 SortIncludes: false
 AlignConsecutiveDeclarations: true
 AlignConsecutiveAssignments: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true

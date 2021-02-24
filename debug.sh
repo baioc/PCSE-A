@@ -1,7 +1,7 @@
 #!/bin/sh
-cmdL='make Space run'
-cmdR='gdb kernel.bin'
 
+cmdL='make Space run'
+cmdR='make Space run_gdb'
 session="work"
 
 # set up tmux
@@ -12,14 +12,14 @@ tmux new-session -d -s $session
 
 # Select pane 1, set dir to api, run vim
 tmux selectp -t 1
-tmux send-keys make Space run  C-m
+tmux send-keys $cmdL  C-m
 
 # Split pane 1 horizontal by 65%, start redis-server
 tmux splitw -h -p 40
 
 # Select pane 2
 tmux selectp -t 2
-tmux send-keys make Space run_gdb  C-m
+tmux send-keys $cmdR  C-m
 
 # create a new window called scratch
 # tmux new-window -t $session:1 -n scratch

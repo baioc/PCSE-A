@@ -1,43 +1,34 @@
+#include "stdio.h"
 #include "debugger.h"
 #include "cpu.h"
-#include "stdio.h"
 #include "console.h"
-#include "process.h"
-#include <stddef.h>
-
-int fact(int n)
-{
-	if (n < 2)
-		return 1;
-
-	return n * fact(n-1);
-}
-
+#include "interrupts.h"
+#include "clock.h"
 
 void kernel_start(void)
 {
-	printf("\fPROC");
-	int i = 43;
-	void *a = &i;
-	if(start(tstA2,512,256,"proc1",a) == 1){
-		printf("erreur A");
-	}
-	if(start(tstB2,512,256,"proc2",a) == 1){
-		printf("erreur B");
-	}
-	tstA2();
-	/*
-	int i;
-//	call_debugger();
-	i = 10;
+  // initialize subsystems
+  console_init();
+  clock_init();
 
-	i = fact(i);
-	console_putbytes("test", 4);
+  // testing
+  int i = 42;
+  printf("Hello world\n");
+  printf("The answer is %d\n", i);
+  // call_debugger();
 
-	printf("\fHello world");
-	*/
-	while(1)
-	  hlt();
+  // enable interrupts and begin handler daemon
+  sti();
+  for (char time[] = "HH:MM:SS";;) {
+    hlt();
 
-	return;
+    unsigned seconds = current_clock() / CLOCKFREQ;
+    unsigned minutes = seconds / 60;
+    seconds %= 60;
+    unsigned hours = minutes / 60;
+    minutes %= 60;
+    hours %= 24;
+    sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
+    console_write_raw(time, 8, 24, 72);
+  }
 }

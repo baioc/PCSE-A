@@ -1,4 +1,4 @@
-.PHONY: clean all debug
+.PHONY: clean all debug run run_gdb
 
 # Output directory for each submakefiles
 OUTPUT := out
