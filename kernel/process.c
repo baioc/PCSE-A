@@ -53,13 +53,51 @@ typedef struct _proc {
  * Internal function declaration
  ******************************************************************************/
 
-link list_proc = LIST_HEAD_INIT(list_proc); // process list
+int idle();
+int tstA();
+int tstB();
+
+/*
+ * Changes context between two processes
+ */
+extern void ctx_sw(uint32_t save_zone1[5], uint32_t save_zone2[5]);
+
+/*
+ * Add process into activable processes list
+ */
+void proc_list_add(proc *proc_to_add);
+
+/*
+ * Remove process from activable processes list
+ */
+void proc_list_del(proc *proc_to_del);
+
+/*
+ * Return first process from activable processes list
+ */
+proc *proc_list_top();
+
+/*
+ * Remove first process from activable processes list
+ */
+proc *proc_list_out();
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
+// Current number of processes started on system
 uint32_t nbr_proc = 0;
+
+// Table of ALL processes. A process is referenced in this table by its pid - 1
+// Because pids are numbered from 1 to NBPROC
+proc process_table[NBPROC];
+
+// List of activable processes
+link list_proc = LIST_HEAD_INIT(list_proc);
+
+// Current process running on processor
+proc *chosen_process;
 
 /*******************************************************************************
  * Public function
