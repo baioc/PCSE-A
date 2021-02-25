@@ -119,38 +119,51 @@ void schedule()
   ctx_sw(pass->save_zone, take->save_zone);
 }
 
-int tstB2(){
-  while(1){
-    printf("B");
-    for(uint32_t i = 0; i < 5000000; i++);
-    ord();
+/*
+ * Create a process
+ * pt_func : main function of process
+ * ssize : size of stack
+ * prio : priority of process for execution
+ * name : name of process
+ * arg : arguments passed to the main function pt_func
+ */
+int start(int (*pt_func)(void *), unsigned long ssize, int prio,
+          const char *name, void *arg)
+{
+  assert(prio > 0 && prio <= MAXPRIO);
+
+  // Too many processes
+  if (nbr_proc == NBPROC) {
+    return -1;
   }
+
+  // Add space for kernel use of stack (main function and args)
+  ssize += 2;
+
+  proc *new_proc = process_table + nbr_proc;
+  new_proc->pid = ++nbr_proc;
+  new_proc->priority = prio;
+  new_proc->ssize = (uint32_t)ssize;
+
+  // Allocate memory for stack
+  new_proc->stack = mem_alloc(ssize * sizeof(uint32_t));
+  // Place the main function of the process at the top of stack
+  // Along with its arguments
+  new_proc->stack[ssize - 2] = (uint32_t)(pt_func);
+  new_proc->stack[ssize - 1] = (uint32_t)(arg);
+  // Initialize stack pointer to the top of stack
+  new_proc->save_zone[1] = (uint32_t)(&(new_proc->stack[ssize - 2]));
+
+  new_proc->name = name;
+  new_proc->state = READY;
+  new_proc->arg = arg;
+
+  // Add process to the queue
+  proc_list_add(new_proc);
+
+  return new_proc->pid;
 }
 
-// test function for the first process
- int tstA(void *arg){
-   uint32_t i;
-   printf(arg);
-   while(1){
-     printf("A");
-     for(i = 0; i < 5000000; i++);
-     ord();
-   }
- }
-
- int tstB(void *arg){
-   uint32_t i;
-   printf(arg);
-   while(1){
-     printf("B");
-     for(i = 0; i < 5000000; i++);
-     ord();
-   }
- }
-
-int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *name, void *arg){
-  if(nbr_proc == NBPROC){
-    return 1;
   }
   proc new_proc;
   new_proc.pid = nbr_proc;
