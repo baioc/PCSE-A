@@ -10,8 +10,8 @@
  ******************************************************************************/
 
 #include "process.h"
-#include "../shared/queue.h"
-#include "../shared/malloc.c"
+#include "queue.h"
+#include "malloc.c"
 #include "stdint.h"
 
 /*******************************************************************************
