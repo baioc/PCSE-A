@@ -22,29 +22,32 @@
  * Types
  ******************************************************************************/
 
+// Describe different states of a process
 typedef enum _proc_state {
-   CHOSEN, // process currently running on processor
-   READY,  // process waiting for his turn
-   BLOCKED_ON_SEMAHPORE,
-   BLOCKED_ON_IO,
-   WAITING_FOR_CHILD,
-   SLEEPING,
-   ZOMBIE
- }proc_state;
+  CHOSEN, // process currently running on processor
+  READY,  // process waiting for his turn
+  BLOCKED_ON_SEMAHPORE,
+  BLOCKED_ON_IO,
+  WAITING_FOR_CHILD,
+  SLEEPING,
+  ZOMBIE
+} proc_state;
 
- struct _proc {
-     uint32_t pid; // between 1 and NBPROC
-     uint32_t priority; // between 1 and MAXPRIO
-     proc_state state;
-     uint32_t saveZone[5];
-     uint32_t ssize;
-     const char *name;
-     void *arg;
-     link position; // useful for the list
-     //uint32_t stack[];
-     uint32_t stack[TAILLE_PILE];
- };
- typedef struct _proc proc;
+// Describe a process
+typedef struct _proc {
+  uint32_t      pid;      // between 1 and NBPROC
+  uint32_t      priority; // between 1 and MAXPRIO
+  proc_state    state;
+  uint32_t      save_zone[5]; // used to save context of process
+  uint32_t      ssize;
+  const char *  name;
+  void *        arg;
+  link          position; // useful for the list
+  uint32_t *    stack;
+  struct _proc *parent; // process which created this process (phase 3)
+  struct _proc
+      *children; // list of processes that this process created (phase 3)
+} proc;
 
 /*******************************************************************************
  * Internal function declaration
