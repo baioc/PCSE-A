@@ -4,6 +4,7 @@
 #include "console.h"
 #include "interrupts.h"
 #include "clock.h"
+#include "process.h"
 
 void kernel_start(void)
 {
@@ -19,7 +20,9 @@ void kernel_start(void)
 
   // enable interrupts and begin handler daemon
   sti();
-  for (char time[] = "HH:MM:SS";;) {
+  // prints elapsed time for 5 seconds
+  char time[] = "HH:MM:SS";
+  for (int i = 0; i < CLOCKFREQ*5; i++) {
     hlt();
 
     unsigned seconds = current_clock() / CLOCKFREQ;
@@ -31,4 +34,8 @@ void kernel_start(void)
     sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
     console_write_raw(time, 8, 24, 72);
   }
+  // deactivate interrupts
+  cli();
+
+  process_init();
 }
