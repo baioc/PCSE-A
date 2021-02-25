@@ -103,25 +103,20 @@ proc *chosen_process;
  * Public function
  ******************************************************************************/
 
-// test schedulding function
-void ord(){
-  if(nbr_proc > 1){
-    proc *pass = queue_out(&list_proc,proc,position); // process who will give the execution
-    proc *take = queue_top(&list_proc,proc,position); // process who will take the execution
-    pass->priority = MAXPRIO - nbr_proc;
-    pass->state = READY;
-    take->state = CHOSEN;
-    queue_add(pass,&list_proc,proc,position,priority);
-    ctx_sw((int*)pass->saveZone,(int*)take->saveZone);
-  }
-}
+/*
+ * First draft of scheduling function
+ */
+void schedule()
+{
+  proc *pass = chosen_process;  // process who will give the execution
+  proc *take = proc_list_out(); // process who will take the execution
 
-int tstA2(){
-  while(1){
-    printf("A");
-    for(uint32_t i = 0; i < 5000000; i++);
-    ord();
-  }
+  pass->state = READY;
+  take->state = CHOSEN;
+  chosen_process = take;
+
+  proc_list_add(pass);
+  ctx_sw(pass->save_zone, take->save_zone);
 }
 
 int tstB2(){
