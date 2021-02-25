@@ -164,24 +164,38 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   return new_proc->pid;
 }
 
+/*
+ * Initialize the system with the main process "idle"
+ * For now, also creates two other processes A and B
+ */
+void process_init()
+{
+  // Add a first special process idle
+  proc *proc_idle = mem_alloc(sizeof(proc));
+
+  proc_idle->pid = ++nbr_proc;
+  proc_idle->priority = 1;
+  proc_idle->ssize = 0;
+
+  proc_idle->stack = 0;
+
+  proc_idle->name = "idle";
+  proc_idle->state = CHOSEN;
+  proc_idle->arg = 0;
+
+  // Initialize chosen_process pointer
+  chosen_process = proc_idle;
+
+  // Add two other processes
+  if (start(tstA, 256, 2, "tstA", 0) < 0) {
+    printf("Error creating process A");
   }
-  proc new_proc;
-  new_proc.pid = nbr_proc;
-  nbr_proc ++;
-  new_proc.priority = prio;
-  new_proc.ssize = (uint32_t)ssize;
-  new_proc.stack[TAILLE_PILE-1] = (uint32_t)(pt_func);
-  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[TAILLE_PILE-1]));
-  /*
-  new_proc.stack = mem_alloc(ssize*sizeof(uint32_t));
-  new_proc.stack[ssize-1] = (uint32_t)(pt_func);
-  new_proc.saveZone[1] = (uint32_t)(&(new_proc.stack[ssize-1]));
-  */
-  new_proc.name = name;
-  new_proc.state = READY;
-  new_proc.arg = arg;
-  queue_add(&new_proc,&list_proc,proc,position,priority);
-  return 0;
+  if (start(tstB, 256, 2, "tstB", 0) < 0) {
+    printf("Error creating process B");
+  }
+
+  // Then starts main process idle
+  idle();
 }
 
 /*
@@ -191,13 +205,61 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
  * If the value of newprio is invalid, return value must be < 0. Otherwise,
  * return value is the previous priority of process
  */
-//int chprio(int pid, int newprio) { return -1; }
+int chprio(uint32_t pid, uint32_t newprio)
+{
+  // process referenced by that pid doesn't exist, or newprio is invalid
+  if (pid > nbr_proc || newprio < 1 || newprio > MAXPRIO) {
+    return -1;
+  }
+
+  proc *   proc = process_table + (pid - 1);
+  uint32_t old_prio = proc->priority;
+
+  // Priority must be changed
+  if (proc->priority != newprio) {
+    // Change process priority
+    proc->priority = newprio;
+
+    // Priority of an activable process has been changed
+    if (chosen_process != proc) {
+      // Remove process from activables processes list
+      proc_list_del(proc);
+      // Place it again in processes list
+      proc_list_add(proc);
+
+      if (newprio > chosen_process->priority) schedule();
+    }
+    // Priority of running process changed and shouldn't be running anymore
+    else if (proc->priority < proc_list_top()->priority)
+    {
+      schedule();
+    }
+  }
+
+  return old_prio;
+}
 
 /*
  * If value of pid is invalid, return value must be < 0. Otherwise, return value
  * is the current priority of process referenced by pid
  */
-//int getprio(int pid) { return -1; }
+int getprio(uint32_t pid)
+{
+  // process referenced by that pid doesn't exist
+  if (pid > nbr_proc) {
+    return -1;
+  }
+
+  return process_table[pid - 1].priority;
+}
+
+/*
+ * Returns pid of calling process
+ */
+int getpid(void)
+{
+  return chosen_process->pid;
+}
 
 /*******************************************************************************
  * Internal function
