@@ -194,3 +194,78 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio, const char *nam
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
+
+/*
+ * Add process into activable processes list
+ */
+void proc_list_add(proc *proc_to_add)
+{
+  queue_add(proc_to_add, &list_proc, proc, position, priority);
+}
+
+/*
+ * Remove process from activable processes list
+ */
+void proc_list_del(proc *proc_to_del)
+{
+  queue_del(proc_to_del, position);
+}
+
+/*
+ * Return first process from activable processes list
+ */
+proc *proc_list_top()
+{
+  return queue_top(&list_proc, proc, position);
+}
+
+/*
+ * Remove first process from activable processes list
+ */
+proc *proc_list_out()
+{
+  return queue_out(&list_proc, proc, position);
+}
+
+/*
+ * Main function of idle process
+ */
+int idle()
+{
+  while (1) {
+    printf("idle");
+    schedule();
+  }
+
+  return 0;
+}
+
+/*
+ * Main function of process A
+ */
+int tstA()
+{
+  while (1) {
+    printf("A");
+    for (uint32_t i = 0; i < 5000000; i++)
+      ;
+    schedule();
+  }
+
+  return 0;
+}
+
+/*
+ * Main function of process B
+ */
+int tstB()
+{
+  while (1) {
+    printf("B");
+    for (uint32_t i = 0; i < 5000000; i++)
+      ;
+    schedule();
+  }
+
+  return 0;
+}
