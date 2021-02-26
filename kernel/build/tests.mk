@@ -19,7 +19,9 @@ endif
 
 # Add define for KERNEL_TEST. If KERNEL_TEST is present, kernel tests will be
 # launched right after kernel startup (see start.c for usage of KERNEL_TEST)
+ifeq ($(KERNEL_TEST),1)
 CFLAGS += -D KERNEL_TEST
+endif
 
 TESTS_OUT    := $(OUTPUT)/tests
 TESTS_SRC    := $(wildcard $(TESTS_DIR)/*.c)

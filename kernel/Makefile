@@ -108,7 +108,7 @@ TESTS_DIR := tests
 include build/tests.mk
 
 ### Generate the kernel, ready to run ###
-kernel.bin: build/kernel.lds $(OBJS) $(TESTS_OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET) 
+kernel.bin: build/kernel.lds $(OBJS) $(TESTS_OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET)
 	$(LD) $(LDFLAGS) -e entry -T$< $(filter-out %.lds, $^) -o $@
 
 ### insert the kernel in an iso file (cdrom) suitable for bochs and USB key
@@ -139,6 +139,11 @@ $(OUTPUT)/%.o: %.c | $(OUTPUT)
 
 $(OUTPUT)/%.o: %.S | $(OUTPUT)
 	$(AS) $(ASFLAGS) $(INCLUDES) -c $< -o $@
+
+# Always rebuild start.c so that KERNEL_TEST macro is taken into account
+.PHONY: $(OUTPUT)/start.o
+$(OUTPUT)/start.o: start.c | $(OUTPUT)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # A text screen for exception dump
 $(OUTPUT)/task_dump_screen.o: $(OUTPUT)/empty.o task_dump_screen.txt
