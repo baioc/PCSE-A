@@ -33,13 +33,22 @@ typedef enum _proc_state {
   ZOMBIE
 } proc_state;
 
+// Used to save context of process
+typedef struct context {
+  int ebx;
+  int esp;
+  int ebp;
+  int esi;
+  int edi;
+} context;
+
 // Describe a process
 typedef struct _proc {
   uint32_t      pid;      // between 1 and NBPROC
   uint32_t      priority; // between 1 and MAXPRIO
   proc_state    state;
-  uint32_t      save_zone[5]; // used to save context of process
   uint32_t      ssize;
+  context       ctx;
   const char *  name;
   void *        arg;
   link          position; // useful for the list
@@ -60,7 +69,7 @@ int tstB();
 /*
  * Changes context between two processes
  */
-extern void ctx_sw(uint32_t save_zone1[5], uint32_t save_zone2[5]);
+extern void ctx_sw(context* ctx1, context* ctx2);
 
 /*
  * Add process into activable processes list
@@ -116,7 +125,7 @@ void schedule()
   chosen_process = take;
 
   proc_list_add(pass);
-  ctx_sw(pass->save_zone, take->save_zone);
+  ctx_sw(&pass->ctx, &take->ctx);
 }
 
 /*
@@ -152,7 +161,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   new_proc->stack[ssize - 2] = (uint32_t)(pt_func);
   new_proc->stack[ssize - 1] = (uint32_t)(arg);
   // Initialize stack pointer to the top of stack
-  new_proc->save_zone[1] = (uint32_t)(&(new_proc->stack[ssize - 2]));
+  new_proc->ctx.esp = (int)(&(new_proc->stack[ssize - 2]));
 
   new_proc->name = name;
   new_proc->state = READY;
