@@ -58,13 +58,13 @@ void process_init();
  * If the value of newprio is invalid, return value must be < 0. Otherwise,
  * return value is the previous priority of process
  */
-int chprio(uint32_t pid, uint32_t newprio);
+int chprio(int pid, int newprio);
 
 /*
  * If value of pid is invalid, return value must be < 0. Otherwise, return value
  * is the current priority of process referenced by pid
  */
-int getprio(uint32_t pid);
+int getprio(int pid);
 
 /*
  * Returns pid of calling process

@@ -12,7 +12,6 @@
 #include "process.h"
 #include "queue.h"
 #include "malloc.c"
-#include "stdint.h"
 
 /*******************************************************************************
  * Macros
@@ -23,7 +22,7 @@
  ******************************************************************************/
 
 // Describe different states of a process
-typedef enum _proc_state {
+typedef enum proc_state {
   CHOSEN, // process currently running on processor
   READY,  // process waiting for his turn
   BLOCKED_ON_SEMAHPORE,
@@ -43,16 +42,16 @@ typedef struct context {
 } context;
 
 // Describe a process
-typedef struct _proc {
-  uint32_t      pid;      // between 1 and NBPROC
-  uint32_t      priority; // between 1 and MAXPRIO
+typedef struct proc {
+  int           pid;      // between 1 and NBPROC
+  int           priority; // between 1 and MAXPRIO
   proc_state    state;
-  uint32_t      ssize;
   context       ctx;
+  int           ssize;
   const char *  name;
   void *        arg;
   link          position; // useful for the list
-  uint32_t *    stack;
+  int *         stack;
   struct _proc *parent; // process which created this process (phase 3)
   struct _proc
       *children; // list of processes that this process created (phase 3)
@@ -96,7 +95,7 @@ proc *proc_list_out();
  ******************************************************************************/
 
 // Current number of processes started on system
-uint32_t nbr_proc = 0;
+int nbr_proc = 0;
 
 // Table of ALL processes. A process is referenced in this table by its pid - 1
 // Because pids are numbered from 1 to NBPROC
@@ -152,14 +151,14 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   proc *new_proc = process_table + nbr_proc;
   new_proc->pid = ++nbr_proc;
   new_proc->priority = prio;
-  new_proc->ssize = (uint32_t)ssize;
+  new_proc->ssize = (int)ssize;
 
   // Allocate memory for stack
-  new_proc->stack = mem_alloc(ssize * sizeof(uint32_t));
+  new_proc->stack = mem_alloc(ssize * sizeof(int));
   // Place the main function of the process at the top of stack
   // Along with its arguments
-  new_proc->stack[ssize - 2] = (uint32_t)(pt_func);
-  new_proc->stack[ssize - 1] = (uint32_t)(arg);
+  new_proc->stack[ssize - 2] = (int)(pt_func);
+  new_proc->stack[ssize - 1] = (int)(arg);
   // Initialize stack pointer to the top of stack
   new_proc->ctx.esp = (int)(&(new_proc->stack[ssize - 2]));
 
@@ -214,7 +213,7 @@ void process_init()
  * If the value of newprio is invalid, return value must be < 0. Otherwise,
  * return value is the previous priority of process
  */
-int chprio(uint32_t pid, uint32_t newprio)
+int chprio(int pid, int newprio)
 {
   // process referenced by that pid doesn't exist, or newprio is invalid
   if (pid > nbr_proc || newprio < 1 || newprio > MAXPRIO) {
@@ -222,7 +221,7 @@ int chprio(uint32_t pid, uint32_t newprio)
   }
 
   proc *   proc = process_table + (pid - 1);
-  uint32_t old_prio = proc->priority;
+  int old_prio = proc->priority;
 
   // Priority must be changed
   if (proc->priority != newprio) {
@@ -252,7 +251,7 @@ int chprio(uint32_t pid, uint32_t newprio)
  * If value of pid is invalid, return value must be < 0. Otherwise, return value
  * is the current priority of process referenced by pid
  */
-int getprio(uint32_t pid)
+int getprio(int pid)
 {
   // process referenced by that pid doesn't exist
   if (pid > nbr_proc) {
@@ -326,7 +325,7 @@ int tstA()
 {
   while (1) {
     printf("A");
-    for (uint32_t i = 0; i < 5000000; i++)
+    for (int i = 0; i < 5000000; i++)
       ;
     schedule();
   }
@@ -341,7 +340,7 @@ int tstB()
 {
   while (1) {
     printf("B");
-    for (uint32_t i = 0; i < 5000000; i++)
+    for (int i = 0; i < 5000000; i++)
       ;
     schedule();
   }
