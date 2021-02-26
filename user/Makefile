@@ -21,12 +21,23 @@ endif
 
 
 ### Tools ###
-TOOLCHAIN_PREFIX ?=
-CC      := $(TOOLCHAIN_PREFIX)gcc
-AS      := $(TOOLCHAIN_PREFIX)gcc
-LD      ?= $(TOOLCHAIN_PREFIX)ld
-AR      := $(TOOLCHAIN_PREFIX)ar
-OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
+ifeq ($(OS_PCSEA),macOS)
+    CC      := i386-pc-elf-gcc
+    AS      := i386-pc-elf-gcc
+    LD      := i386-pc-elf-ld
+    AR      := i386-pc-elf-ar
+    OBJCOPY := i386-pc-elf-objcopy
+endif
+
+ifeq ($(OS_PCSEA),)
+    TOOLCHAIN_PREFIX ?=
+    CC      := $(TOOLCHAIN_PREFIX)gcc
+    AS      := $(TOOLCHAIN_PREFIX)gcc
+    LD      ?= $(TOOLCHAIN_PREFIX)ld
+    AR      := $(TOOLCHAIN_PREFIX)ar
+    OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
+endif
+
 DEPS    := $(CC)
 ECHO    ?= echo
 MKDIR   := mkdir

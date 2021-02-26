@@ -28,6 +28,9 @@
 #define SCREEN_CMD_PORT 0x3D4
 #define SCREEN_DAT_PORT 0x3D5
 
+#define CONSOLE_H 25
+#define CONSOLE_L 80
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -64,9 +67,10 @@ static uint16_t test_console_get_cursor_pos();
  * Run all tests related to the console.
  * For now, it only tests prints on screen.
  */
-void test_console() {
-  test_console_clear();
+void test_console()
+{
   test_console_newline();
+  test_console_clear();
 }
 
 /*******************************************************************************
@@ -77,7 +81,8 @@ void test_console() {
  * Check if the screen is emptied when '\f' character is sent.
  * Also check cursor's position
  */
-static void test_console_clear() {
+static void test_console_clear()
+{
   uint16_t  pos;
   uint16_t *current_mem_pos;
 
@@ -107,7 +112,8 @@ static void test_console_clear() {
 /*
  * Check if cursor position is correctly set when sending '\n' character
  */
-static void test_console_newline() {
+static void test_console_newline()
+{
   uint16_t cursor_pos;
   uint16_t cursor_line, cursor_col;
 
@@ -118,9 +124,9 @@ static void test_console_newline() {
   // Tests printing a newline character on every line apart from the last
   for (uint8_t line = 0; line < CONSOLE_H - 1; line++) {
     printf("\n");
-    cursor_pos  = test_console_get_cursor_pos();
+    cursor_pos = test_console_get_cursor_pos();
     cursor_line = cursor_pos / CONSOLE_L;
-    cursor_col  = cursor_pos % CONSOLE_L;
+    cursor_col = cursor_pos % CONSOLE_L;
     assert(cursor_line == line + 1);
     assert(cursor_col == 0);
   }
@@ -128,9 +134,9 @@ static void test_console_newline() {
   printf("\n");
 
   // Check if we stay on that line
-  cursor_pos  = test_console_get_cursor_pos();
+  cursor_pos = test_console_get_cursor_pos();
   cursor_line = cursor_pos / CONSOLE_L;
-  cursor_col  = cursor_pos % CONSOLE_L;
+  cursor_col = cursor_pos % CONSOLE_L;
   assert(cursor_line == CONSOLE_H - 1);
   assert(cursor_col == 0);
 }
@@ -138,7 +144,8 @@ static void test_console_newline() {
 /*
  * Return current cursor position
  */
-static uint16_t test_console_get_cursor_pos() {
+static uint16_t test_console_get_cursor_pos()
+{
   uint8_t lower_part, higher_part;
 
   outb(0x0f, SCREEN_CMD_PORT);

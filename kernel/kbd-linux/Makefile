@@ -1,9 +1,18 @@
 # Copyright (C) 2002 by Simon Nieuviarts
 FILES=keyboard.c scancode.c
 OBJS=$(notdir $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(FILES))))
+
+ifeq ($(OS_PCSEA),macOS)
+CC=i386-pc-elf-gcc -m32 -march=pentium
+AS=i386-pc-elf-gcc -m32
+LD=i386-pc-elf-ld -melf_i386
+endif
+
+ifeq ($(OS_PCSEA),)
 CC=gcc -m32 -march=pentium
 AS=gcc -m32
 LD=ld -melf_i386
+endif
 DIRS=.
 
 KFLAGS=-Wall -O2 -fomit-frame-pointer -pipe -nostdinc
