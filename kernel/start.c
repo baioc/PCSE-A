@@ -37,5 +37,7 @@ void kernel_start(void)
   // deactivate interrupts
   cli();
 
+
+  // Testing if 3 processes with the same priority can work together
   process_init();
 }

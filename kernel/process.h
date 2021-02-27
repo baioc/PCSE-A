@@ -21,6 +21,7 @@
 // TODO make sure that kernel will support 1000 processes by the end of project
 #define NBPROC  30
 #define MAXPRIO 256
+#define SCHEDFREQ 100
 
 /*******************************************************************************
  * Types

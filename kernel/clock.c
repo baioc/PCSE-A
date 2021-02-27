@@ -14,6 +14,7 @@
 #include "cpu.h"
 #include "stdint.h"
 #include "interrupts.h"
+#include "process.h"
 
 extern void clock_tick_handler(void);
 
@@ -85,4 +86,11 @@ void clock_tick(void)
 
   // intr acknowledgement
   acknowledge_interrupt(0);
+
+  // if jiffies is proportional to SCHEDFREQ, we change the chosen process
+  if(g_jiffies%(CLOCKFREQ / SCHEDFREQ) == 0)
+  {
+      schedule();
+  }
+
 }

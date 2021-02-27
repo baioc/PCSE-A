@@ -12,6 +12,7 @@
 #include "process.h"
 #include "queue.h"
 #include "malloc.c"
+#include "cpu.h"
 
 /*******************************************************************************
  * Macros
@@ -64,6 +65,7 @@ typedef struct proc {
 int idle();
 int tstA();
 int tstB();
+int tstC();
 
 /*
  * Changes context between two processes
@@ -116,6 +118,11 @@ proc *chosen_process;
  */
 void schedule()
 {
+  // necessary if we want to test the clock without initializing the processes
+  if(chosen_process == NULL){
+    return;
+  }
+  
   proc *pass = chosen_process;  // process who will give the execution
   proc *take = proc_list_out(); // process who will take the execution
 
@@ -200,6 +207,10 @@ void process_init()
   }
   if (start(tstB, 256, 2, "tstB", 0) < 0) {
     printf("Error creating process B");
+  }
+
+  if (start(tstC, 256, 2, "tstC", 0) < 0) {
+    printf("Error creating process C");
   }
 
   // Then starts main process idle
@@ -312,7 +323,9 @@ int idle()
 {
   while (1) {
     printf("idle");
-    schedule();
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
@@ -325,9 +338,9 @@ int tstA()
 {
   while (1) {
     printf("A");
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
@@ -340,9 +353,24 @@ int tstB()
 {
   while (1) {
     printf("B");
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
+    sti();
+    hlt();
+    cli();
+  }
+
+  return 0;
+}
+
+/*
+ * Main function of process C
+ */
+int tstC()
+{
+  while (1) {
+    printf("C");
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
