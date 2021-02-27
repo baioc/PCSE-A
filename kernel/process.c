@@ -18,6 +18,8 @@
  * Macros
  ******************************************************************************/
 
+#define STACK_SIZE 1024
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -52,7 +54,7 @@ typedef struct proc {
   const char *  name;
   void *        arg;
   link          position; // useful for the list
-  int *         stack;
+  int *         kernel_stack;
   struct _proc *parent; // process which created this process (phase 3)
   struct _proc
       *children; // list of processes that this process created (phase 3)
@@ -70,7 +72,7 @@ int tstC();
 /*
  * Changes context between two processes
  */
-extern void ctx_sw(context* ctx1, context* ctx2);
+extern void ctx_sw(context *ctx1, context *ctx2);
 
 /*
  * Add process into activable processes list
@@ -109,6 +111,9 @@ link list_proc = LIST_HEAD_INIT(list_proc);
 // Current process running on processor
 proc *chosen_process;
 
+char *char_a = "A";
+char *char_b = "B";
+
 /*******************************************************************************
  * Public function
  ******************************************************************************/
@@ -119,12 +124,12 @@ proc *chosen_process;
 void schedule()
 {
   // necessary if we want to test the clock without initializing the processes
-  if(chosen_process == NULL){
-    return;
-  }
-  
-  proc *pass = chosen_process;  // process who will give the execution
-  proc *take = proc_list_out(); // process who will take the execution
+  if(chosen_process == NULL) return;
+
+  if (proc_list_top()->priority < chosen_process->priority) return;
+
+  proc* pass = chosen_process;  // process who will give the execution
+  proc* take = proc_list_out(); // process who will take the execution
 
   pass->state = READY;
   take->state = CHOSEN;
@@ -145,6 +150,7 @@ void schedule()
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg)
 {
+  (void)ssize;
   assert(prio > 0 && prio <= MAXPRIO);
 
   // Too many processes
@@ -152,22 +158,19 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
     return -1;
   }
 
-  // Add space for kernel use of stack (main function and args)
-  ssize += 2;
-
   proc *new_proc = process_table + nbr_proc;
   new_proc->pid = ++nbr_proc;
   new_proc->priority = prio;
-  new_proc->ssize = (int)ssize;
 
   // Allocate memory for stack
-  new_proc->stack = mem_alloc(ssize * sizeof(int));
-  // Place the main function of the process at the top of stack
+  new_proc->kernel_stack = mem_alloc(STACK_SIZE * sizeof(int));
+  // Place the main function of the process at the top of kernel_stack
   // Along with its arguments
-  new_proc->stack[ssize - 2] = (int)(pt_func);
-  new_proc->stack[ssize - 1] = (int)(arg);
-  // Initialize stack pointer to the top of stack
-  new_proc->ctx.esp = (int)(&(new_proc->stack[ssize - 2]));
+  new_proc->kernel_stack[STACK_SIZE - 3] = (int)(pt_func);
+  // TODO return address must be positionned at STACK_SIZE - 2
+  new_proc->kernel_stack[STACK_SIZE - 1] = (int)(arg);
+  // Initialize kernel_stack pointer to the top of kernel_stack
+  new_proc->ctx.esp = (int)(&(new_proc->kernel_stack[STACK_SIZE - 3]));
 
   new_proc->name = name;
   new_proc->state = READY;
@@ -192,7 +195,7 @@ void process_init()
   proc_idle->priority = 1;
   proc_idle->ssize = 0;
 
-  proc_idle->stack = 0;
+  proc_idle->kernel_stack = 0;
 
   proc_idle->name = "idle";
   proc_idle->state = CHOSEN;
@@ -202,10 +205,10 @@ void process_init()
   chosen_process = proc_idle;
 
   // Add two other processes
-  if (start(tstA, 256, 2, "tstA", 0) < 0) {
+  if (start(tstA, 256, 2, "tstA", char_a) < 0) {
     printf("Error creating process A");
   }
-  if (start(tstB, 256, 2, "tstB", 0) < 0) {
+  if (start(tstB, 256, 2, "tstB", char_b) < 0) {
     printf("Error creating process B");
   }
 
@@ -231,8 +234,8 @@ int chprio(int pid, int newprio)
     return -1;
   }
 
-  proc *   proc = process_table + (pid - 1);
-  int old_prio = proc->priority;
+  proc *proc = process_table + (pid - 1);
+  int   old_prio = proc->priority;
 
   // Priority must be changed
   if (proc->priority != newprio) {
@@ -334,10 +337,11 @@ int idle()
 /*
  * Main function of process A
  */
-int tstA()
+int tstA(void *arg)
 {
+  char *process_char = arg;
   while (1) {
-    printf("A");
+    printf("%s", process_char);
     sti();
     hlt();
     cli();
@@ -349,10 +353,11 @@ int tstA()
 /*
  * Main function of process B
  */
-int tstB()
+int tstB(void *arg)
 {
+  char *process_char = arg;
   while (1) {
-    printf("B");
+    printf("%s", process_char);
     sti();
     hlt();
     cli();
