@@ -12,6 +12,7 @@
 #include "process.h"
 #include "queue.h"
 #include "malloc.c"
+#include "cpu.h"
 
 /*******************************************************************************
  * Macros
@@ -66,6 +67,7 @@ typedef struct proc {
 int idle();
 int tstA();
 int tstB();
+int tstC();
 
 /*
  * Changes context between two processes
@@ -121,6 +123,9 @@ char *char_b = "B";
  */
 void schedule()
 {
+  // necessary if we want to test the clock without initializing the processes
+  if(chosen_process == NULL) return;
+
   if (proc_list_top()->priority < chosen_process->priority) return;
 
   proc* pass = chosen_process;  // process who will give the execution
@@ -205,6 +210,10 @@ void process_init()
   }
   if (start(tstB, 256, 2, "tstB", char_b) < 0) {
     printf("Error creating process B");
+  }
+
+  if (start(tstC, 256, 2, "tstC", 0) < 0) {
+    printf("Error creating process C");
   }
 
   // Then starts main process idle
@@ -317,7 +326,9 @@ int idle()
 {
   while (1) {
     printf("idle");
-    schedule();
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
@@ -326,14 +337,13 @@ int idle()
 /*
  * Main function of process A
  */
-int tstA(void *arg)
+int tstA()
 {
-  char *process_char = arg;
   while (1) {
-    printf("%s", process_char);
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
+    printf("A");
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
@@ -342,14 +352,28 @@ int tstA(void *arg)
 /*
  * Main function of process B
  */
-int tstB(void *arg)
+int tstB()
 {
-  char *process_char = arg;
   while (1) {
-    printf("%s", process_char);
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
+    printf("B");
+    sti();
+    hlt();
+    cli();
+  }
+
+  return 0;
+}
+
+/*
+ * Main function of process C
+ */
+int tstC()
+{
+  while (1) {
+    printf("C");
+    sti();
+    hlt();
+    cli();
   }
 
   return 0;
