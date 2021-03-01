@@ -26,9 +26,6 @@
 // Kernel stack size.
 #define STACK_SIZE 512
 
-// Max scheduling priority (min is 1).
-#define MAXPRIO 256
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -68,10 +65,10 @@ struct proc {
  * Internal function declaration
  ******************************************************************************/
 
-/// Changes context between two processes.
+/// Changes context between two processes, defined in ctx_sw.S
 extern void ctx_sw(struct context *old, struct context *new);
 
-/// Called implicitly whenever a process exits, actual logic is in exit().
+/// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
 // Main function of the idle process.
@@ -226,7 +223,10 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   proc_list_add(new_proc);
 
   // check if the new process should be run immediately or not
-  if (new_proc->priority > current_process->priority) schedule();
+  if (current_process->pid != 0 &&
+      new_proc->priority > current_process->priority) {
+    schedule();
+  }
 
   return new_proc->pid;
 }
