@@ -329,7 +329,7 @@ static inline void proc_free(struct proc *proc)
 static int test(void *arg)
 {
   const char c = *(char *)arg;
-  while (1) {
+  for (int i = 0; i < 5 * (CLOCKFREQ/SCHEDFREQ); ++i) {
     printf("%c", c);
     hlt();
   }
