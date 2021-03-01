@@ -87,10 +87,6 @@ void clock_tick(void)
   // intr acknowledgement
   acknowledge_interrupt(0);
 
-  // if jiffies is proportional to SCHEDFREQ, we change the chosen process
-  if(g_jiffies%(CLOCKFREQ / SCHEDFREQ) == 0)
-  {
-      schedule();
-  }
-
+  // run the scheduler after each quantum
+  if (g_jiffies % (CLOCKFREQ / SCHEDFREQ) == 0) schedule();
 }

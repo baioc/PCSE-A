@@ -64,6 +64,8 @@ SERV_EXC_TASK(31)
 	.text;                                                         \
 	.globl FUNCTION##_handler;                                     \
 FUNCTION##_handler:                                                \
+	/* disable interrupts, just in case */                         \
+	cli;                                                           \
 	/* save scratch registers (eflags is handled automatically) */ \
 	pushl %eax;                                                    \
 	pushl %edx;                                                    \
@@ -74,6 +76,8 @@ FUNCTION##_handler:                                                \
 	popl %ecx;                                                     \
 	popl %edx;                                                     \
 	popl %eax;                                                     \
+	/* re-enable interrupts */                                     \
+	sti;                                                           \
 	/* return from the interrupt handler */                        \
 	iret
 

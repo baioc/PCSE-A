@@ -18,9 +18,11 @@
  * Macros
  ******************************************************************************/
 
-// Max scheduling priority (min is 1).
+/// Max scheduling priority (min is 1).
 #define MAXPRIO 256
-#define SCHEDFREQ 100
+
+/// Scheduling frequency in Hz, meaning a quantum is 1/SCHEDFREQ seconds.
+#define SCHEDFREQ 50
 
 /*******************************************************************************
  * Types

@@ -13,9 +13,11 @@
 
 #include "debug.h"
 #include "queue.h"
+#include "cpu.h"
+#include "clock.h"
+#include "console.h"
 
 #include "malloc.c"
-#include "cpu.h"
 
 /*******************************************************************************
  * Macros
@@ -39,7 +41,7 @@ enum proc_state {
   DEAD,   // marks a free process slot
 };
 
-// NOTE: must be kept in sync with ctx_sw
+// NOTE: must be kept in sync with ctx_sw()
 struct context {
   unsigned ebx;
   unsigned esp;
@@ -72,8 +74,8 @@ extern void ctx_sw(struct context *old, struct context *new);
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
-// Main function of the idle process.
-static int idle(void);
+// Enables interrupts and starts kernel idle process.
+static void idle(void);
 
 /**
  * Kills a process (even if it is a zombie) once and for all.
@@ -324,36 +326,68 @@ static inline void proc_free(struct proc *proc)
   free_procs = proc;
 }
 
-// TODO: clear up test procs created in idle()
 static int test(void *arg)
 {
   const char c = *(char *)arg;
-  for (int i = 0; i < 5; ++i) {
+  while (1) {
     printf("%c", c);
-    schedule();
+    hlt();
   }
   return c;
 }
 
-static int idle(void)
+static int init(void *arg)
 {
-  // Add two other processes
-  if (start(test, 256, 2, "tstA", "A") < 0) {
-    printf("Error creating process A\n");
-  }
-  if (start(test, 256, 2, "tstB", "B") < 0) {
-    printf("Error creating process B\b");
-  }
-  if (start(test, 256, 2, "tstC", "C") < 0) {
-    printf("Error creating process C\n");
-  }
+  const int i = (int)arg;
+  printf("Hello world\n");
+  printf("The answer is %d\n", i);
 
-  while (1) {
-    printf(".");
-    schedule();
-  }
+  int pid;
+  (void)pid;
+
+  pid = start(test, 256, 1, "test_A", "A");
+  assert(pid > 0);
+
+  pid = start(test, 256, 1, "test_B", "B");
+  assert(pid > 0);
+
+  pid = start(test, 256, 1, "test_C", "C");
+  assert(pid > 0);
 
   return 0;
+}
+
+static int wall_clock_daemon(void *arg)
+{
+  (void)arg;
+  char time[] = "HH:MM:SS";
+  for (;;) {
+    unsigned seconds = current_clock() / CLOCKFREQ;
+    unsigned minutes = seconds / 60;
+    seconds %= 60;
+    unsigned hours = minutes / 60;
+    minutes %= 60;
+    hours %= 24;
+    sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
+    console_write_raw(time, 8, 24, 72);
+  }
+  return 0;
+}
+
+static void idle(void)
+{
+  int pid;
+  (void)pid;
+
+  pid = start(wall_clock_daemon, 256, 1, "clock", NULL);
+  assert(pid > 0);
+
+  pid = start(init, 256, MAXPRIO, "init", (void *)42);
+  assert(pid > 0);
+
+  // start
+  sti();
+  for (;;) hlt();
 }
 
 static inline void proc_list_add(struct proc *proc)
