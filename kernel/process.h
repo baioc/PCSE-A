@@ -2,7 +2,7 @@
  * process.h
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc
  */
 
 #ifndef _process_H_
@@ -43,6 +43,12 @@ void process_init(void);
  */
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg);
+
+/// Terminates the current process with the given exit code.
+void exit(int retval);
+
+/// Kills the process with the given pid, returning 0 on success.
+int kill(int pid);
 
 /*
  * Change priority of process referenced by pid to the value newprio

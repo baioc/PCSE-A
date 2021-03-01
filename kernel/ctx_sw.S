@@ -21,3 +21,11 @@ ctx_sw:
     # on passe la main au nouveau processus
     ret
 
+
+    .text
+    .globl proc_exit
+# The sole reason this needs to be in assembly is to get the return value from
+# the exiting process' main routine and pass it correctly to the real exit.
+proc_exit:
+    push %eax
+    call exit

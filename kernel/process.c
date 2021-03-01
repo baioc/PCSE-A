@@ -13,7 +13,6 @@
 
 #include "debug.h"
 #include "queue.h"
-#include "string.h"
 
 #include "malloc.c"
 
@@ -62,6 +61,7 @@ struct proc {
     link         queue; // doubly-linked list node used by queues
     struct proc *next;  // singly-linked list pointer
   } node;
+  int retval;
 };
 
 /*******************************************************************************
@@ -71,8 +71,18 @@ struct proc {
 /// Changes context between two processes.
 extern void ctx_sw(struct context *old, struct context *new);
 
+/// Called implicitly whenever a process exits, actual logic is in exit().
+extern void proc_exit(void);
+
 // Main function of the idle process.
 static int idle(void);
+
+/**
+ * Kills a process (even if it is a zombie) once and for all.
+ * This means freeing any resources it owns and moving it to the free list, so
+ * make sure it has already been deleted from the queue.
+ */
+static void proc_free(struct proc *proc);
 
 // Adds process into priority queue.
 static void proc_list_add(struct proc *proc);
@@ -101,6 +111,7 @@ static link process_queue;
 
 // Process disjoint lists.
 static struct proc *free_procs = NULL;
+static struct proc *zombie_procs = NULL;
 
 /*******************************************************************************
  * Public function
@@ -114,6 +125,7 @@ void process_init(void)
 
   // initialize process queue and lists
   process_queue = (link)LIST_HEAD_INIT(process_queue);
+  zombie_procs = NULL;
   free_procs = NULL;
   for (int i = NBPROC; i >= 1; --i) { // all other procs begin dead
     struct proc *proc = &process_table[i];
@@ -134,9 +146,31 @@ void schedule(void)
   struct proc *pass = current_process;
   assert(pass != NULL);
 
+  // check if there are zombies to bury
+  while (zombie_procs != NULL) {
+    struct proc *zombie = zombie_procs;
+    zombie_procs = zombie->node.next;
+    proc_free(zombie);
+  }
+
+  switch (pass->state) {
   // put it back in the priority queue if it's still active
-  pass->state = READY;
-  proc_list_add(pass);
+  case ACTIVE:
+    pass->state = READY;
+    proc_list_add(pass);
+    break;
+
+  // we'll only find a zombie proc here when it has just exited
+  case ZOMBIE:
+    // we cannot free the context we're in, so delay that operation to next time
+    pass->node.next = zombie_procs;
+    zombie_procs = pass;
+    break;
+
+  case READY:
+  case DEAD: // unreachable
+    assert(false);
+  }
 
   // process that will take control of the execution
   assert(!queue_empty(&process_queue));
@@ -183,7 +217,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
 
   // setup stack with the given arg, termination code and main function
   new_proc->kernel_stack[STACK_SIZE - 1] = (unsigned)(arg);
-  // new_proc->kernel_stack[STACK_SIZE - 2] = (unsigned)(exit);
+  new_proc->kernel_stack[STACK_SIZE - 2] = (unsigned)(proc_exit);
   new_proc->kernel_stack[STACK_SIZE - 3] = (unsigned)(pt_func);
   new_proc->ctx.esp = (unsigned)(&(new_proc->kernel_stack[STACK_SIZE - 3]));
 
@@ -211,14 +245,15 @@ int chprio(int pid, int newprio)
   proc->priority = newprio;
 
   // Priority of an activable process has been changed
-  // TODO: what if it wasn't a ready process ?
   if (proc != current_process) {
+    assert(proc->state == READY);
     proc_list_del(proc); // Remove process from its current queue
     proc_list_add(proc); // Place it again with the updated priority
     if (proc->priority > current_process->priority) schedule();
 
     // Priority of running process changed and it shouldn't be running anymore
   } else if (current_process->priority < proc_list_top()->priority) {
+    assert(proc->state == ACTIVE);
     schedule();
   }
 
@@ -238,20 +273,65 @@ int getpid(void)
   return current_process->pid;
 }
 
+void exit(int retval)
+{
+  // store exit code for later
+  current_process->retval = retval;
+
+  // zombify current process and yield
+  current_process->state = ZOMBIE;
+  schedule();
+
+  for (;;) { // ensures gcc marks exit as `noreturn`
+  }
+}
+
+int kill(int pid)
+{
+  if (pid < 1 || pid > NBPROC) return -1;
+  struct proc *proc = &process_table[pid];
+  switch (proc->state) {
+  case DEAD:
+    return -1; // invalid pid
+  case ZOMBIE:
+    break; // can't kill what's already dead
+  case ACTIVE:
+    exit(-1); // current process just killed itself... lets just exit
+    break;
+  case READY:
+    // when a proc isn't running, we can kill and bury it directly
+    proc_list_del(proc);
+    proc_free(proc);
+    break;
+  }
+  return 0;
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
 
+static inline void proc_free(struct proc *proc)
+{
+  // free resources
+  mem_free(proc->kernel_stack, STACK_SIZE * sizeof(int));
+  mem_free(proc->name, (strlen(proc->name) + 1) * sizeof(char));
+
+  // add it to the free list
+  proc->state = DEAD;
+  proc->node.next = free_procs;
+  free_procs = proc;
+}
+
+// TODO: clear up test procs created in idle()
 static int test(void *arg)
 {
-  char *proc_char = arg;
-  while (1) {
-    printf("%c", *proc_char);
-    for (int i = 0; i < 5000000; i++) {
-    }
+  const char c = *(char *)arg;
+  for (int i = 0; i < 5; ++i) {
+    printf("%c", c);
     schedule();
   }
-  return 0;
+  return c;
 }
 
 static int idle(void)
@@ -268,7 +348,7 @@ static int idle(void)
   }
 
   while (1) {
-    printf("idle");
+    printf(".");
     schedule();
   }
 
