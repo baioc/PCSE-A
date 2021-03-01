@@ -12,11 +12,10 @@ void kernel_start(void)
   console_init();
   clock_init();
 
-  // testing
+  // TODO: clear up print testing
   int i = 42;
   printf("Hello world\n");
   printf("The answer is %d\n", i);
-  // call_debugger();
 
   // enable interrupts and begin handler daemon
   sti();
