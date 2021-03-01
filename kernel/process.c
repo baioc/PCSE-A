@@ -2,7 +2,7 @@
  * process.c
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc
  */
 
 /*******************************************************************************
@@ -10,311 +10,263 @@
  ******************************************************************************/
 
 #include "process.h"
+
+#include "debug.h"
 #include "queue.h"
+#include "string.h"
+
 #include "malloc.c"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
-#define STACK_SIZE 1024
+// Total number of kenel processes.
+#define NBPROC 1000
+
+// Kernel stack size.
+#define STACK_SIZE 512
+
+// Max scheduling priority (min is 1).
+#define MAXPRIO 256
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
 // Describe different states of a process
-typedef enum proc_state {
-  CHOSEN, // process currently running on processor
+enum proc_state {
+  ACTIVE, // process currently running on processor
   READY,  // process waiting for his turn
-  BLOCKED_ON_SEMAHPORE,
-  BLOCKED_ON_IO,
-  WAITING_FOR_CHILD,
-  SLEEPING,
-  ZOMBIE
-} proc_state;
+  ZOMBIE, // terminated but still in use
+  DEAD,   // marks a free process slot
+};
 
-// Used to save context of process
-typedef struct context {
-  int ebx;
-  int esp;
-  int ebp;
-  int esi;
-  int edi;
-} context;
+// NOTE: must be kept in sync with ctx_sw
+struct context {
+  unsigned ebx;
+  unsigned esp;
+  unsigned ebp;
+  unsigned esi;
+  unsigned edi;
+};
 
-// Describe a process
-typedef struct proc {
-  int           pid;      // between 1 and NBPROC
-  int           priority; // between 1 and MAXPRIO
-  proc_state    state;
-  context       ctx;
-  int           ssize;
-  const char *  name;
-  void *        arg;
-  link          position; // useful for the list
-  int *         kernel_stack;
-  struct _proc *parent; // process which created this process (phase 3)
-  struct _proc
-      *children; // list of processes that this process created (phase 3)
-} proc;
+struct proc {
+  int             pid;
+  enum proc_state state;
+  char *          name;
+  struct context  ctx; // execution context registers
+  unsigned *      kernel_stack;
+  int             priority;
+  union {
+    link         queue; // doubly-linked list node used by queues
+    struct proc *next;  // singly-linked list pointer
+  } node;
+};
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
-int idle();
-int tstA();
-int tstB();
+/// Changes context between two processes.
+extern void ctx_sw(struct context *old, struct context *new);
 
-/*
- * Changes context between two processes
- */
-extern void ctx_sw(context *ctx1, context *ctx2);
+// Main function of the idle process.
+static int idle(void);
 
-/*
- * Add process into activable processes list
- */
-void proc_list_add(proc *proc_to_add);
+// Adds process into priority queue.
+static void proc_list_add(struct proc *proc);
 
-/*
- * Remove process from activable processes list
- */
-void proc_list_del(proc *proc_to_del);
+// Removes process from the queue it's currently in.
+static void proc_list_del(struct proc *proc);
 
-/*
- * Return first process from activable processes list
- */
-proc *proc_list_top();
+// References the highest-priority process in a queue.
+static struct proc *proc_list_top(void);
 
-/*
- * Remove first process from activable processes list
- */
-proc *proc_list_out();
+// Pops the highest-priority process from the priority queue.
+static struct proc *proc_list_out(void);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
-// Current number of processes started on system
-int nbr_proc = 0;
+// Table of ALL processes, indexed by their pid.
+static struct proc process_table[NBPROC + 1] = {0};
 
-// Table of ALL processes. A process is referenced in this table by its pid - 1
-// Because pids are numbered from 1 to NBPROC
-proc process_table[NBPROC];
+// Current process running on processor.
+static struct proc *current_process = NULL;
 
-// List of activable processes
-link list_proc = LIST_HEAD_INIT(list_proc);
+// Process priority queue.
+static link process_queue;
 
-// Current process running on processor
-proc *chosen_process;
-
-char *char_a = "A";
-char *char_b = "B";
+// Process disjoint lists.
+static struct proc *free_procs = NULL;
 
 /*******************************************************************************
  * Public function
  ******************************************************************************/
 
-/*
- * First draft of scheduling function
- */
-void schedule()
+void process_init(void)
 {
-  if (proc_list_top()->priority < chosen_process->priority) return;
+  // set up initial kernel process, idle, which has pid 0
+  struct proc *proc_idle = &process_table[0];
+  *proc_idle = (struct proc){.name = "idle", .pid = 0, .priority = 0};
 
-  proc* pass = chosen_process;  // process who will give the execution
-  proc* take = proc_list_out(); // process who will take the execution
+  // initialize process queue and lists
+  process_queue = (link)LIST_HEAD_INIT(process_queue);
+  free_procs = NULL;
+  for (int i = NBPROC; i >= 1; --i) { // all other procs begin dead
+    struct proc *proc = &process_table[i];
+    proc->state = DEAD;
+    proc->node.next = free_procs;
+    free_procs = proc;
+  }
 
+  // idle is the first process to run
+  current_process = proc_idle;
+  proc_idle->state = ACTIVE;
+  idle();
+}
+
+void schedule(void)
+{
+  // process that's passing the cpu over
+  struct proc *pass = current_process;
+  assert(pass != NULL);
+
+  // put it back in the priority queue if it's still active
   pass->state = READY;
-  take->state = CHOSEN;
-  chosen_process = take;
-
   proc_list_add(pass);
+
+  // process that will take control of the execution
+  assert(!queue_empty(&process_queue));
+  struct proc *take = proc_list_out();
+  current_process = take;
+  take->state = ACTIVE;
+
+  // hand the cpu over to the newly scheduled process
   ctx_sw(&pass->ctx, &take->ctx);
 }
 
-/*
- * Create a process
- * pt_func : main function of process
- * ssize : size of stack
- * prio : priority of process for execution
- * name : name of process
- * arg : arguments passed to the main function pt_func
- */
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg)
 {
+  assert(pt_func != NULL);
   (void)ssize;
-  assert(prio > 0 && prio <= MAXPRIO);
+  if (prio < 1 || prio > MAXPRIO) return -1;
+  assert(name != NULL);
 
-  // Too many processes
-  if (nbr_proc == NBPROC) {
+  // bail when we can't find a free slot in the process table
+  struct proc *new_proc = free_procs;
+  if (new_proc == NULL) return -1;
+  free_procs = new_proc->node.next;
+
+  // otherwise set-up its pid (implicit) and priority (explicit)
+  new_proc->pid = new_proc - process_table; // calculate index from pointer
+  new_proc->priority = prio;
+
+  // copy name
+  new_proc->name = mem_alloc((strlen(name) + 1) * sizeof(char));
+  if (new_proc->name == NULL) {
+    free_procs = new_proc;
+    return -1;
+  }
+  strcpy(new_proc->name, name);
+
+  // allocate stack
+  new_proc->kernel_stack = mem_alloc(STACK_SIZE * sizeof(int));
+  if (new_proc->kernel_stack == NULL) {
+    mem_free(new_proc->name, (strlen(new_proc->name) + 1) * sizeof(char));
+    free_procs = new_proc;
     return -1;
   }
 
-  proc *new_proc = process_table + nbr_proc;
-  new_proc->pid = ++nbr_proc;
-  new_proc->priority = prio;
+  // setup stack with the given arg, termination code and main function
+  new_proc->kernel_stack[STACK_SIZE - 1] = (unsigned)(arg);
+  // new_proc->kernel_stack[STACK_SIZE - 2] = (unsigned)(exit);
+  new_proc->kernel_stack[STACK_SIZE - 3] = (unsigned)(pt_func);
+  new_proc->ctx.esp = (unsigned)(&(new_proc->kernel_stack[STACK_SIZE - 3]));
 
-  // Allocate memory for stack
-  new_proc->kernel_stack = mem_alloc(STACK_SIZE * sizeof(int));
-  // Place the main function of the process at the top of kernel_stack
-  // Along with its arguments
-  new_proc->kernel_stack[STACK_SIZE - 3] = (int)(pt_func);
-  // TODO return address must be positionned at STACK_SIZE - 2
-  new_proc->kernel_stack[STACK_SIZE - 1] = (int)(arg);
-  // Initialize kernel_stack pointer to the top of kernel_stack
-  new_proc->ctx.esp = (int)(&(new_proc->kernel_stack[STACK_SIZE - 3]));
-
-  new_proc->name = name;
+  // this process is now ready to run
   new_proc->state = READY;
-  new_proc->arg = arg;
-
-  // Add process to the queue
   proc_list_add(new_proc);
+
+  // check if the new process should be run immediately or not
+  if (new_proc->priority > current_process->priority) schedule();
 
   return new_proc->pid;
 }
 
-/*
- * Initialize the system with the main process "idle"
- * For now, also creates two other processes A and B
- */
-void process_init()
-{
-  // Add a first special process idle
-  proc *proc_idle = mem_alloc(sizeof(proc));
-
-  proc_idle->pid = ++nbr_proc;
-  proc_idle->priority = 1;
-  proc_idle->ssize = 0;
-
-  proc_idle->kernel_stack = 0;
-
-  proc_idle->name = "idle";
-  proc_idle->state = CHOSEN;
-  proc_idle->arg = 0;
-
-  // Initialize chosen_process pointer
-  chosen_process = proc_idle;
-
-  // Add two other processes
-  if (start(tstA, 256, 2, "tstA", char_a) < 0) {
-    printf("Error creating process A");
-  }
-  if (start(tstB, 256, 2, "tstB", char_b) < 0) {
-    printf("Error creating process B");
-  }
-
-  // Then starts main process idle
-  idle();
-}
-
-/*
- * Change priority of process referenced by pid to the value newprio
- * If priority changed and the process was in a queue, it needs to be placed
- * again in that queue depending on its new priority.
- * If the value of newprio is invalid, return value must be < 0. Otherwise,
- * return value is the previous priority of process
- */
 int chprio(int pid, int newprio)
 {
   // process referenced by that pid doesn't exist, or newprio is invalid
-  if (pid > nbr_proc || newprio < 1 || newprio > MAXPRIO) {
-    return -1;
-  }
+  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) return -1;
 
-  proc *proc = process_table + (pid - 1);
-  int   old_prio = proc->priority;
+  struct proc *proc = &process_table[pid];
+  if (proc->state == DEAD) return -1;
 
-  // Priority must be changed
-  if (proc->priority != newprio) {
-    // Change process priority
-    proc->priority = newprio;
+  const int old_prio = proc->priority;
+  if (newprio == old_prio) return old_prio; // change priority only if needed
 
-    // Priority of an activable process has been changed
-    if (chosen_process != proc) {
-      // Remove process from activables processes list
-      proc_list_del(proc);
-      // Place it again in processes list
-      proc_list_add(proc);
+  proc->priority = newprio;
 
-      if (newprio > chosen_process->priority) schedule();
-    }
-    // Priority of running process changed and shouldn't be running anymore
-    else if (proc->priority < proc_list_top()->priority)
-    {
-      schedule();
-    }
+  // Priority of an activable process has been changed
+  // TODO: what if it wasn't a ready process ?
+  if (proc != current_process) {
+    proc_list_del(proc); // Remove process from its current queue
+    proc_list_add(proc); // Place it again with the updated priority
+    if (proc->priority > current_process->priority) schedule();
+
+    // Priority of running process changed and it shouldn't be running anymore
+  } else if (current_process->priority < proc_list_top()->priority) {
+    schedule();
   }
 
   return old_prio;
 }
 
-/*
- * If value of pid is invalid, return value must be < 0. Otherwise, return value
- * is the current priority of process referenced by pid
- */
 int getprio(int pid)
 {
-  // process referenced by that pid doesn't exist
-  if (pid > nbr_proc) {
-    return -1;
-  }
-
-  return process_table[pid - 1].priority;
+  if (pid < 1 || pid > NBPROC) return -1;
+  struct proc *proc = &process_table[pid];
+  if (proc->state == DEAD) return -1;
+  return proc->priority;
 }
 
-/*
- * Returns pid of calling process
- */
 int getpid(void)
 {
-  return chosen_process->pid;
+  return current_process->pid;
 }
 
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
 
-/*
- * Add process into activable processes list
- */
-void proc_list_add(proc *proc_to_add)
+static int test(void *arg)
 {
-  queue_add(proc_to_add, &list_proc, proc, position, priority);
+  char *proc_char = arg;
+  while (1) {
+    printf("%c", *proc_char);
+    for (int i = 0; i < 5000000; i++) {
+    }
+    schedule();
+  }
+  return 0;
 }
 
-/*
- * Remove process from activable processes list
- */
-void proc_list_del(proc *proc_to_del)
+static int idle(void)
 {
-  queue_del(proc_to_del, position);
-}
+  // Add two other processes
+  if (start(test, 256, 2, "tstA", "A") < 0) {
+    printf("Error creating process A\n");
+  }
+  if (start(test, 256, 2, "tstB", "B") < 0) {
+    printf("Error creating process B\b");
+  }
+  if (start(test, 256, 2, "tstC", "C") < 0) {
+    printf("Error creating process C\n");
+  }
 
-/*
- * Return first process from activable processes list
- */
-proc *proc_list_top()
-{
-  return queue_top(&list_proc, proc, position);
-}
-
-/*
- * Remove first process from activable processes list
- */
-proc *proc_list_out()
-{
-  return queue_out(&list_proc, proc, position);
-}
-
-/*
- * Main function of idle process
- */
-int idle()
-{
   while (1) {
     printf("idle");
     schedule();
@@ -323,34 +275,22 @@ int idle()
   return 0;
 }
 
-/*
- * Main function of process A
- */
-int tstA(void *arg)
+static inline void proc_list_add(struct proc *proc)
 {
-  char *process_char = arg;
-  while (1) {
-    printf("%s", process_char);
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
-  }
-
-  return 0;
+  queue_add(proc, &process_queue, struct proc, node.queue, priority);
 }
 
-/*
- * Main function of process B
- */
-int tstB(void *arg)
+static inline struct proc *proc_list_out(void)
 {
-  char *process_char = arg;
-  while (1) {
-    printf("%s", process_char);
-    for (int i = 0; i < 5000000; i++)
-      ;
-    schedule();
-  }
+  return queue_out(&process_queue, struct proc, node.queue);
+}
 
-  return 0;
+static inline void proc_list_del(struct proc *proc)
+{
+  queue_del(proc, node.queue);
+}
+
+static inline struct proc *proc_list_top(void)
+{
+  return queue_top(&process_queue, struct proc, node.queue);
 }
