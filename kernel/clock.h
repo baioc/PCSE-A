@@ -19,6 +19,12 @@
 /// Ticks per second.
 #define CLOCKFREQ 100
 
+// Converts time from MS miliseconds to tick units.
+#define MS_TO_TICKS(ms) ((ms) * CLOCKFREQ / 1000)
+
+// Converts time from TS kernel ticks to milisecond units.
+#define TICKS_TO_MS(ts) ((ts) * 1000 / CLOCKFREQ)
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -44,6 +50,6 @@ void clock_settings(unsigned long *quartz, unsigned long *ticks);
 unsigned long current_clock(void);
 
 /// Sends the current process to sleep for at least the given number of ticks.
-// TODO: void wait_clock(unsigned long clock);
+void wait_clock(unsigned long clock);
 
 #endif // _CLOCK_H_

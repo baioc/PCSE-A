@@ -35,10 +35,11 @@
 
 // Describe different states of a process
 enum proc_state {
-  ACTIVE, // process currently running on processor
-  READY,  // process waiting for his turn
-  ZOMBIE, // terminated but still in use
-  DEAD,   // marks a free process slot
+  ACTIVE,   // process currently running on processor
+  READY,    // process waiting for his turn
+  SLEEPING, // process is waiting on its alarm
+  ZOMBIE,   // terminated but still in use
+  DEAD,     // marks a free process slot
 };
 
 // NOTE: must be kept in sync with ctx_sw()
@@ -101,17 +102,16 @@ static struct proc *proc_list_out(void);
  ******************************************************************************/
 
 // Table of ALL processes, indexed by their pid.
-static struct proc process_table[NBPROC + 1] = {0};
+static struct proc process_table[NBPROC + 1];
 
 // Current process running on processor.
 static struct proc *current_process = NULL;
 
-// Process priority queue.
-static link process_queue;
-
 // Process disjoint lists.
-static struct proc *free_procs = NULL;
-static struct proc *zombie_procs = NULL;
+static link         ready_procs;
+static struct proc *free_procs;
+static struct proc *zombie_procs;
+static link         sleeping_procs;
 
 /*******************************************************************************
  * Public function
@@ -125,6 +125,7 @@ void process_init(void)
 
   // initialize process queue and lists
   process_queue = (link)LIST_HEAD_INIT(process_queue);
+  sleeping_procs = (link)LIST_HEAD_INIT(sleeping_procs);
   zombie_procs = NULL;
   free_procs = NULL;
   for (int i = NBPROC; i >= 1; --i) { // all other procs begin dead
@@ -308,6 +309,14 @@ int kill(int pid)
     break;
   }
   return 0;
+}
+
+void sleep(unsigned long ticks)
+{
+  // setup alarm, go to sleep and yield
+  current_process->time.alarm = current_clock() + ticks;
+  current_process->state = SLEEPING;
+  schedule();
 }
 
 /*******************************************************************************

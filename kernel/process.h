@@ -72,11 +72,14 @@ int chprio(int pid, int newprio);
 int getprio(int pid);
 
 /*
- * Returns pid of calling process
+ * Returns pid of the calling process.
  */
 int getpid(void);
 
 /// Makes the current process yield the CPU to the scheduler.
 void schedule(void);
+
+/// Makes the current process yield the CPU for at least TICKS jiffies.
+void sleep(unsigned long ticks);
 
 #endif /* _process_H_ */

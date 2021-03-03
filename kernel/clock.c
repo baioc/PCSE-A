@@ -75,6 +75,11 @@ unsigned long current_clock(void)
   return g_jiffies;
 }
 
+void wait_clock(unsigned long clock)
+{
+  sleep(clock);
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
