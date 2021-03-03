@@ -220,6 +220,7 @@ void process_init()
   if (start(tstC, 256, 2, "tstC", 0) < 0) {
     printf("Error creating process C");
   }
+  show_parent();
   show_children();
   // Then starts main process idle
   idle();
@@ -271,10 +272,24 @@ int chprio(int pid, int newprio)
 */
 void show_children(void){
   proc *p;
-  int i = 0;
+  int i = 1;
+  printf("%s :\n",chosen_process->name);
   queue_for_each(p,&(chosen_process->list_children),proc,cposition){
-    printf("enfant %d : %s\n",i,p->name);
+    printf("Enfant %d : %s\n",i,p->name);
     i++;
+  }
+}
+
+/*
+  print all parent's name of the chosen process if it has one
+*/
+void show_parent(void){
+  printf("%s :\n",chosen_process->name);
+  if(chosen_process->parent != NULL){
+    printf("Parent : %s\n",(chosen_process->parent)->name);
+  }
+  else{
+    printf("Le processus n'a pas de parent\n");
   }
 }
 
@@ -359,6 +374,7 @@ int tstA(void *arg)
   char *process_char = arg;
   while (1) {
     printf("%s", process_char);
+    show_parent();
     sti();
     hlt();
     cli();

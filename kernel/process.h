@@ -83,4 +83,9 @@ void schedule();
 */
 void show_children(void);
 
+/*
+  print all parent's name of the chosen process if it has one
+*/
+void show_parent(void);
+
 #endif /* _process_H_ */
