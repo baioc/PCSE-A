@@ -76,6 +76,20 @@ int getprio(int pid);
  */
 int getpid(void);
 
+/**
+ * Waits for a child process to finish and reads its return value.
+ *
+ * This procedure may block while waiting for a child process with the specified
+ * PID (a negative value here means any child will do) or it may return directly
+ * in case the given PID is invalid or there are no children to wait for.
+ * In the first case the return value is the pid of the child that woke this
+ * process up and in the second one it is a strictly negative value.
+ *
+ * When RETVALP is not null and a child process was successfully awaited on,
+ * the value it points to will be overwritten with the child's exit code.
+ */
+int waitpid(int pid, int *retvalp);
+
 /// Makes the current process yield the CPU to the scheduler.
 void schedule(void);
 

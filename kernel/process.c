@@ -35,10 +35,11 @@
 
 // Describe different states of a process
 enum proc_state {
-  ACTIVE, // process currently running on processor
-  READY,  // process waiting for his turn
-  ZOMBIE, // terminated but still in use
-  DEAD,   // marks a free process slot
+  ACTIVE,         // process currently running on processor
+  READY,          // process waiting for his turn
+  ZOMBIE,         // terminated but still in use
+  DEAD,           // marks a free process slot
+  AWAITING_CHILD, // process is waiting for one of its children
 };
 
 // NOTE: must be kept in sync with ctx_sw()
@@ -77,15 +78,20 @@ extern void ctx_sw(struct context *old, struct context *new);
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
-// Enables interrupts and starts kernel idle process.
+// Starts 'init', enables interrupts and loops indefinitely.
 static void idle(void);
 
+// Process tree root that acts as a process reaper daemon.
+static int init(void *);
+
+// Zombifies a process without freeing its resources.
+static void zombify(struct proc *proc, int retval);
+
 /**
- * Kills a process (even if it is a zombie) once and for all.
- * This means freeing any resources it owns and moving it to the free list, so
- * make sure it has already been deleted from the queue.
+ * Kills a zombie process once and for all.
+ * This means freeing any resources it owns and moving it to the free list.
  */
-static void proc_free(struct proc *proc);
+static void destroy(struct proc *proc);
 
 // Adds process into priority queue.
 static void proc_list_add(struct proc *proc);
@@ -107,7 +113,7 @@ static void show_children(void);
 /*
   print all parent's name of the chosen process if it has one
 */
-static void show_parent(void);
+static void show_parent(struct proc *proc);
 
 /*******************************************************************************
  * Variables
@@ -115,6 +121,9 @@ static void show_parent(void);
 
 // Table of ALL processes, indexed by their pid.
 static struct proc process_table[NBPROC + 1] = {0};
+
+#define IDLE_PROC process_table[0]
+#define INIT_PROC process_table[1]
 
 // Current process running on processor.
 static struct proc *current_process = NULL;
@@ -124,7 +133,6 @@ static link process_queue;
 
 // Process disjoint lists.
 static struct proc *free_procs = NULL;
-static struct proc *zombie_procs = NULL;
 
 /*******************************************************************************
  * Public function
@@ -132,15 +140,13 @@ static struct proc *zombie_procs = NULL;
 
 void process_init(void)
 {
-  // set up initial kernel process, idle, which has pid 0
-  struct proc *proc_idle = &process_table[0];
-  *proc_idle =
+  // set up initial kernel process, 'idle', which has pid 0
+  IDLE_PROC =
       (struct proc){.name = "idle", .pid = 0, .priority = 0, .parent = NULL};
-  proc_idle->children = (link)LIST_HEAD_INIT(proc_idle->children);
+  IDLE_PROC.children = (link)LIST_HEAD_INIT(IDLE_PROC.children);
 
   // initialize process queue and lists
   process_queue = (link)LIST_HEAD_INIT(process_queue);
-  zombie_procs = NULL;
   free_procs = NULL;
   for (int i = NBPROC; i >= 1; --i) { // all other procs begin dead
     struct proc *proc = &process_table[i];
@@ -150,8 +156,8 @@ void process_init(void)
   }
 
   // idle is the first process to run
-  current_process = proc_idle;
-  proc_idle->state = ACTIVE;
+  current_process = &IDLE_PROC;
+  IDLE_PROC.state = ACTIVE;
   idle();
 }
 
@@ -160,13 +166,6 @@ void schedule(void)
   // process that's passing the cpu over
   struct proc *pass = current_process;
   assert(pass != NULL);
-
-  // check if there are zombies to bury
-  while (zombie_procs != NULL) {
-    struct proc *zombie = zombie_procs;
-    zombie_procs = zombie->node.next;
-    proc_free(zombie);
-  }
 
   switch (pass->state) {
   // put it back in the priority queue if it's still active
@@ -177,9 +176,15 @@ void schedule(void)
 
   // we'll only find a zombie proc here when it has just exited
   case ZOMBIE:
-    // we cannot free the context we're in, so delay that operation to next time
-    pass->node.next = zombie_procs;
-    zombie_procs = pass;
+    printf("\n* %s(%d) just died *\n", pass->name, pass->pid);
+    // let the parent process know when one of its children just dies
+    if (pass->parent->state == AWAITING_CHILD) {
+      pass->parent->state = READY;
+      proc_list_add(pass->parent);
+    }
+    break;
+
+  case AWAITING_CHILD: // nothing to do
     break;
 
   case READY:
@@ -239,15 +244,18 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   // initialize children list and add itself to parent's children list
   new_proc->children = (link)LIST_HEAD_INIT(new_proc->children);
   new_proc->parent = current_process;
-  queue_add(new_proc, &new_proc->parent->children, struct proc, siblings, priority);
+  queue_add(
+      new_proc, &new_proc->parent->children, struct proc, siblings, parent);
+  show_parent(new_proc);
 
   // this process is now ready to run
   new_proc->state = READY;
   proc_list_add(new_proc);
 
   // check if the new process should be run immediately or not
-  if (current_process->pid != 0 &&
-      new_proc->priority > current_process->priority) {
+  if (current_process != &IDLE_PROC && current_process != &INIT_PROC &&
+      new_proc->priority > current_process->priority)
+  {
     schedule();
   }
 
@@ -298,14 +306,10 @@ int getpid(void)
 
 void exit(int retval)
 {
-  // store exit code for later
-  current_process->retval = retval;
-
-  // zombify current process and yield
-  current_process->state = ZOMBIE;
+  zombify(current_process, retval);
   schedule();
-
-  for (;;) { // ensures gcc marks exit as `noreturn`
+  for (assert(false);;) { // assert is just a sanity check
+    // ensures gcc marks exit as `noreturn`
   }
 }
 
@@ -319,23 +323,85 @@ int kill(int pid)
   case ZOMBIE:
     break; // can't kill what's already dead
   case ACTIVE:
-    exit(-1); // current process just killed itself... lets just exit
+    exit(0); // current process just killed itself... lets just exit
     break;
   case READY:
-    // when a proc isn't running, we can kill and bury it directly
     proc_list_del(proc);
-    proc_free(proc);
+    zombify(proc, 0);
+    break;
+  case AWAITING_CHILD:
+    zombify(proc, 0);
     break;
   }
   return 0;
+}
+
+int waitpid(int pid, int *retvalp)
+{
+  if (pid < 0) { // reap *any* child process
+    if (queue_empty(&current_process->children)) return -1;
+
+    for (;;) {
+      printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
+      // TODO: optimize this search with priorities
+      struct proc *child;
+      queue_for_each(child, &current_process->children, struct proc, siblings)
+      {
+        if (child->state == ZOMBIE) {
+          printf("found %d!\n", child->pid);
+          if (retvalp != NULL) *retvalp = child->retval;
+          destroy(child);
+          return child->pid;
+        }
+      }
+
+      printf("will block ...\n");
+      current_process->state = AWAITING_CHILD;
+      schedule();
+    }
+
+  } else { // reap a specific child
+    if (pid < 1 || pid > NBPROC) return -1;
+    struct proc *proc = &process_table[pid];
+    if (proc->state == DEAD || proc->parent != current_process) return -1;
+
+    for (;;) {
+      printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
+      if (proc->state == ZOMBIE) {
+        printf("found %d!\n", proc->pid);
+        if (retvalp != NULL) *retvalp = proc->retval;
+        destroy(proc);
+        return pid;
+      }
+
+      printf("will block ...\n");
+      current_process->state = AWAITING_CHILD;
+      schedule();
+    }
+  }
 }
 
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
 
-static inline void proc_free(struct proc *proc)
+static void zombify(struct proc *proc, int retval)
 {
+  proc->retval = retval; // store exit code
+  proc->state = ZOMBIE;  // change its state
+  // when a parent process dies, its now-orphan children are adopted by init
+  struct proc *child;
+  queue_for_each(child, &proc->children, struct proc, siblings)
+  {
+    child->parent = &INIT_PROC;
+    queue_add(child, &child->parent->children, struct proc, siblings, parent);
+  }
+}
+
+static inline void destroy(struct proc *proc)
+{
+  assert(proc->state == ZOMBIE);
+
   // free resources
   mem_free(proc->kernel_stack, STACK_SIZE * sizeof(int));
   mem_free(proc->name, (strlen(proc->name) + 1) * sizeof(char));
@@ -351,31 +417,9 @@ static int test(void *arg)
   const char c = *(char *)arg;
   for (int i = 0; i < 5 * (CLOCKFREQ / SCHEDFREQ); ++i) {
     printf("%c", c);
-    show_parent();
     hlt();
   }
   return c;
-}
-
-static int init(void *arg)
-{
-  const int i = (int)arg;
-  printf("Hello world\n");
-  printf("The answer is %d\n", i);
-
-  int pid;
-  (void)pid;
-
-  pid = start(test, 256, 1, "test_A", "A");
-  assert(pid > 0);
-
-  pid = start(test, 256, 1, "test_B", "B");
-  assert(pid > 0);
-
-  pid = start(test, 256, 1, "test_C", "C");
-  assert(pid > 0);
-
-  return 0;
 }
 
 static int wall_clock_daemon(void *arg)
@@ -395,21 +439,45 @@ static int wall_clock_daemon(void *arg)
   return 0;
 }
 
-static void idle(void)
+static int init(void *arg)
 {
+  (void)arg;
+  const int i = 42;
+  printf("Hello world\n");
+  printf("The answer is %d\n", i);
+
   int pid;
   (void)pid;
 
   pid = start(wall_clock_daemon, 256, 1, "clock", NULL);
   assert(pid > 0);
 
-  pid = start(init, 256, MAXPRIO, "init", (void *)42);
+  pid = start(test, 256, 2, "test_A", "A");
   assert(pid > 0);
 
-  show_parent();
+  pid = start(test, 256, 2, "test_B", "B");
+  assert(pid > 0);
+
+  pid = start(test, 256, 2, "test_C", "C");
+  assert(pid > 0);
+
   show_children();
 
-  // start
+  // reaper daemon makes sure zombie children are properly killed
+  for (;;) {
+    if (waitpid(-1, NULL) < 0) hlt();
+  }
+  return 0;
+}
+
+static void idle(void)
+{
+  // idle must start init
+  const int pid = start(init, 128, 1, "init", NULL);
+  (void)pid;
+  assert(pid == 1);
+
+  // and then stay idle forever
   sti();
   for (;;) hlt();
 }
@@ -452,11 +520,11 @@ static void show_children(void)
 /*
   print all parent's name of the chosen process if it has one
 */
-static void show_parent(void)
+static void show_parent(struct proc *proc)
 {
-  printf("%s :\n", current_process->name);
-  if (current_process->parent != NULL) {
-    printf("Parent : %s\n", current_process->parent->name);
+  printf("%s :\n", proc->name);
+  if (proc->parent != NULL) {
+    printf("Parent : %s\n", proc->parent->name);
   } else {
     printf("Le processus n'a pas de parent\n");
   }
