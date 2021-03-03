@@ -1,5 +1,3 @@
-#include "stdio.h"
-#include "debugger.h"
 #include "console.h"
 #include "clock.h"
 #include "process.h"
@@ -10,19 +8,11 @@
 
 void kernel_start(void)
 {
-  // initialize subsystems
   console_init();
   clock_init();
-
-  // testing
-  int i = 42;
-  printf("Hello world\n");
-  printf("The answer is %d\n", i);
-  // call_debugger();
+  process_init();
 
 #ifdef KERNEL_TEST
-    kernel_run_tests();
+  kernel_run_tests();
 #endif
-
-  process_init();
 }
