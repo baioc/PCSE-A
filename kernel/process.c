@@ -23,14 +23,25 @@
  * Macros
  ******************************************************************************/
 
-/// Scheduling quantum, in tick units.
-#define QUANTUM (CLOCKFREQ / SCHEDFREQ)
-
 // Total number of kenel processes.
 #define NBPROC 1000
 
 // Kernel stack size.
 #define STACK_SIZE 512
+
+/// Scheduling quantum, in tick units.
+#define QUANTUM (CLOCKFREQ / SCHEDFREQ)
+
+// TODO: remove these when we actually have separated user and kernel spaces
+#define COME_FROM_USERSPACE() \
+  do {                        \
+    cli();                    \
+  } while (0)
+#define RETURN_TO_USERSPACE(ret) \
+  do {                           \
+    sti();                       \
+    return (ret);                \
+  } while (0)
 
 // Removes process pointed to by P from the priority queue it's currently in.
 #define PROC_CLEAR_QUEUE(p) queue_del((p), node.queue)
@@ -99,7 +110,11 @@ extern void ctx_sw(struct context *old, struct context *new);
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
-/// Makes the current process yield the CPU to the scheduler.
+/**
+ * Makes the current process yield the CPU to the scheduler.
+ * NOTE: this routine supposes interrupts are disabled and will re-enable them
+ * when switching context back to user space.
+ */
 static void schedule(void);
 
 // Enables interrupts and starts kernel idle process.
@@ -132,7 +147,7 @@ static link         sleeping_procs;
  * Public function
  ******************************************************************************/
 
-void process_init(void)
+void process_init(void) // only called from kernel space
 {
   // set up initial kernel process, idle, which has pid 0
   struct proc *proc_idle = &process_table[0];
@@ -159,6 +174,7 @@ void process_init(void)
 
 void process_tick(void)
 {
+  // assuming this is only called from ISRs, we're already in kernel space
   assert(current_process->state == ACTIVE);
   if (current_process->time.quantum == 0 ||
       --current_process->time.quantum == 0) {
@@ -169,14 +185,16 @@ void process_tick(void)
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg)
 {
+  COME_FROM_USERSPACE();
+
   assert(pt_func != NULL);
   (void)ssize;
-  if (prio < 1 || prio > MAXPRIO) return -1;
+  if (prio < 1 || prio > MAXPRIO) RETURN_TO_USERSPACE(-1);
   assert(name != NULL);
 
   // bail when we can't find a free slot in the process table
   struct proc *new_proc = free_procs;
-  if (new_proc == NULL) return -1;
+  if (new_proc == NULL) RETURN_TO_USERSPACE(-1);
   free_procs = new_proc->node.next;
 
   // otherwise set-up its pid (implicit) and priority (explicit)
@@ -187,7 +205,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   new_proc->name = mem_alloc((strlen(name) + 1) * sizeof(char));
   if (new_proc->name == NULL) {
     free_procs = new_proc;
-    return -1;
+    RETURN_TO_USERSPACE(-1);
   }
   strcpy(new_proc->name, name);
 
@@ -196,7 +214,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   if (new_proc->kernel_stack == NULL) {
     mem_free(new_proc->name, (strlen(new_proc->name) + 1) * sizeof(char));
     free_procs = new_proc;
-    return -1;
+    RETURN_TO_USERSPACE(-1);
   }
 
   // setup stack with the given arg, termination code and main function
@@ -216,19 +234,25 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
     schedule();
   }
 
-  return new_proc->pid;
+  const int pid = new_proc->pid;
+  RETURN_TO_USERSPACE(pid);
 }
 
 int chprio(int pid, int newprio)
 {
+  COME_FROM_USERSPACE();
+
   // process referenced by that pid doesn't exist, or newprio is invalid
-  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) return -1;
+  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) {
+    RETURN_TO_USERSPACE(-1);
+  }
 
   struct proc *proc = &process_table[pid];
-  if (proc->state == DEAD) return -1;
+  if (proc->state == DEAD) RETURN_TO_USERSPACE(-1);
 
   const int old_prio = proc->priority;
-  if (newprio == old_prio) return old_prio; // change priority only if needed
+  if (newprio == old_prio)
+    RETURN_TO_USERSPACE(old_prio); // change priority only if needed
 
   proc->priority = newprio;
 
@@ -248,24 +272,30 @@ int chprio(int pid, int newprio)
     schedule();
   }
 
-  return old_prio;
+  RETURN_TO_USERSPACE(old_prio);
 }
 
 int getprio(int pid)
 {
-  if (pid < 1 || pid > NBPROC) return -1;
+  COME_FROM_USERSPACE();
+  if (pid < 1 || pid > NBPROC) RETURN_TO_USERSPACE(-1);
   struct proc *proc = &process_table[pid];
-  if (proc->state == DEAD) return -1;
-  return proc->priority;
+  if (proc->state == DEAD) RETURN_TO_USERSPACE(-1);
+  const int prio = proc->priority;
+  RETURN_TO_USERSPACE(prio);
 }
 
 int getpid(void)
 {
-  return current_process->pid;
+  COME_FROM_USERSPACE();
+  const int pid = current_process->pid;
+  RETURN_TO_USERSPACE(pid);
 }
 
 void exit(int retval)
 {
+  COME_FROM_USERSPACE();
+
   // store exit code for later
   current_process->retval = retval;
 
@@ -279,11 +309,14 @@ void exit(int retval)
 
 int kill(int pid)
 {
-  if (pid < 1 || pid > NBPROC) return -1;
+  COME_FROM_USERSPACE();
+
+  if (pid < 1 || pid > NBPROC) RETURN_TO_USERSPACE(-1);
   struct proc *proc = &process_table[pid];
+
   switch (proc->state) {
   case DEAD: // invalid pid
-    return -1;
+    RETURN_TO_USERSPACE(-1);
   case ZOMBIE: // can't kill what's already dead
     break;
   case ACTIVE: // current process just killed itself :'( lets just exit
@@ -296,11 +329,13 @@ int kill(int pid)
     proc_free(proc);
     break;
   }
-  return 0;
+
+  RETURN_TO_USERSPACE(0);
 }
 
 void sleep(unsigned long ticks)
 {
+  COME_FROM_USERSPACE();
   // setup alarm, go to sleep and yield
   current_process->time.alarm = current_clock() + ticks;
   current_process->state = SLEEPING;
@@ -313,9 +348,6 @@ void sleep(unsigned long ticks)
 
 static void schedule(void)
 {
-  // TODO: cli() only when going from user to kernel space
-  cli();
-
   // process that's passing the cpu over
   struct proc *pass = current_process;
   assert(pass != NULL);

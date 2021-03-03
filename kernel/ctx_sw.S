@@ -3,8 +3,6 @@
 # Stack structure:
 #   %esp + 4 : old process context address
 #   %esp + 8 : new process context address
-# We suppose this is being called from an interrupt such that %eflags was saved
-# when the interrupt handler began and will be restored on `iret`.
 ctx_sw:
     # we don't need to save %eax, %edx or %ecx since this is a function call
     movl 4(%esp), %eax
@@ -24,7 +22,6 @@ ctx_sw:
     sti
     # give the cpu to the process by returning to it with the updated %esp
     ret
-
 
     .text
     .globl proc_exit
