@@ -53,11 +53,11 @@ typedef struct proc {
   int           ssize;
   const char *  name;
   void *        arg;
-  link          position; // useful for the list
+  link          position; // activable process's link
+  link          cposition; // children process's link
   int *         kernel_stack;
-  struct _proc *parent; // process which created this process (phase 3)
-  struct _proc
-      *children; // list of processes that this process created (phase 3)
+  struct proc   *parent; // process which created this process (phase 3)
+  link          list_children; // children's list
 } proc;
 
 /*******************************************************************************
@@ -161,7 +161,12 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   proc *new_proc = process_table + nbr_proc;
   new_proc->pid = ++nbr_proc;
   new_proc->priority = prio;
-
+  new_proc->list_children = (link)LIST_HEAD_INIT(new_proc->list_children);
+  // The running process is the new process's parent
+  new_proc->parent = chosen_process;
+  // We also add the new process in the chosen_process's children list
+  queue_add(new_proc, &(chosen_process->list_children), proc, cposition,
+                                                                    priority);
   // Allocate memory for stack
   new_proc->kernel_stack = mem_alloc(STACK_SIZE * sizeof(int));
   // Place the main function of the process at the top of kernel_stack
@@ -195,6 +200,7 @@ void process_init()
   proc_idle->priority = 1;
   proc_idle->ssize = 0;
 
+  proc_idle->list_children = (link)LIST_HEAD_INIT(proc_idle->list_children);
   proc_idle->kernel_stack = 0;
 
   proc_idle->name = "idle";
@@ -211,11 +217,10 @@ void process_init()
   if (start(tstB, 256, 2, "tstB", char_b) < 0) {
     printf("Error creating process B");
   }
-
   if (start(tstC, 256, 2, "tstC", 0) < 0) {
     printf("Error creating process C");
   }
-
+  show_children();
   // Then starts main process idle
   idle();
 }
@@ -259,6 +264,18 @@ int chprio(int pid, int newprio)
   }
 
   return old_prio;
+}
+
+/*
+  print all children's name of the chosen process
+*/
+void show_children(void){
+  proc *p;
+  int i = 0;
+  queue_for_each(p,&(chosen_process->list_children),proc,cposition){
+    printf("enfant %d : %s\n",i,p->name);
+    i++;
+  }
 }
 
 /*

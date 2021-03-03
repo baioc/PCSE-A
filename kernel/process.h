@@ -78,4 +78,9 @@ int getpid(void);
  */
 void schedule();
 
+/*
+  print all children's name of the chosen process
+*/
+void show_children(void);
+
 #endif /* _process_H_ */
