@@ -23,11 +23,31 @@
  * Macros
  ******************************************************************************/
 
+/// Scheduling quantum, in tick units.
+#define QUANTUM (CLOCKFREQ / SCHEDFREQ)
+
 // Total number of kenel processes.
 #define NBPROC 1000
 
 // Kernel stack size.
 #define STACK_SIZE 512
+
+// Removes process pointed to by P from the priority queue it's currently in.
+#define PROC_CLEAR_QUEUE(p) queue_del((p), node.queue)
+
+// Adds process pointed to by P into the ready priority queue.
+#define PROC_ENQUEUE_READY(p) \
+  queue_add((p), &ready_procs, struct proc, node.queue, priority)
+
+// Pops and returns the highest-priority process from the ready queue.
+#define PROC_DEQUEUE_READY() (queue_out(&ready_procs, struct proc, node.queue))
+
+// References the highest-priority process in a queue.
+#define PROC_READY_TOP() (queue_top(&ready_procs, struct proc, node.queue))
+
+// Adds process pointed to by P into the sleeping queue, sorted by its alarm.
+#define PROC_ENQUEUE_SLEEPING(p) \
+  queue_add((p), &sleeping_procs, struct proc, node.queue, time.alarm)
 
 /*******************************************************************************
  * Types
@@ -57,10 +77,14 @@ struct proc {
   char *          name;
   struct context  ctx; // execution context registers
   unsigned *      kernel_stack;
-  int             priority;
+  int             priority; // scheduling priority
   union {
-    link         queue; // doubly-linked list node used by queues
-    struct proc *next;  // singly-linked list pointer
+    unsigned long quantum; // remaining cpu time (in ticks) for this proc
+    unsigned long alarm;   // timestamp (in ticks) to wake a sleeping process
+  } time;
+  union {
+    link         queue; // doubly-linked list node used by priority queues
+    struct proc *next;  // singly-linked list pointer used by zombie|free lists
   } node;
   int retval;
 };
@@ -75,6 +99,9 @@ extern void ctx_sw(struct context *old, struct context *new);
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
+/// Makes the current process yield the CPU to the scheduler.
+static void schedule(void);
+
 // Enables interrupts and starts kernel idle process.
 static void idle(void);
 
@@ -84,18 +111,6 @@ static void idle(void);
  * make sure it has already been deleted from the queue.
  */
 static void proc_free(struct proc *proc);
-
-// Adds process into priority queue.
-static void proc_list_add(struct proc *proc);
-
-// Removes process from the queue it's currently in.
-static void proc_list_del(struct proc *proc);
-
-// References the highest-priority process in a queue.
-static struct proc *proc_list_top(void);
-
-// Pops the highest-priority process from the priority queue.
-static struct proc *proc_list_out(void);
 
 /*******************************************************************************
  * Variables
@@ -124,7 +139,7 @@ void process_init(void)
   *proc_idle = (struct proc){.name = "idle", .pid = 0, .priority = 0};
 
   // initialize process queue and lists
-  process_queue = (link)LIST_HEAD_INIT(process_queue);
+  ready_procs = (link)LIST_HEAD_INIT(ready_procs);
   sleeping_procs = (link)LIST_HEAD_INIT(sleeping_procs);
   zombie_procs = NULL;
   free_procs = NULL;
@@ -138,49 +153,17 @@ void process_init(void)
   // idle is the first process to run
   current_process = proc_idle;
   proc_idle->state = ACTIVE;
+  proc_idle->time.quantum = 0;
   idle();
 }
 
-void schedule(void)
+void process_tick(void)
 {
-  // process that's passing the cpu over
-  struct proc *pass = current_process;
-  assert(pass != NULL);
-
-  // check if there are zombies to bury
-  while (zombie_procs != NULL) {
-    struct proc *zombie = zombie_procs;
-    zombie_procs = zombie->node.next;
-    proc_free(zombie);
+  assert(current_process->state == ACTIVE);
+  if (current_process->time.quantum == 0 ||
+      --current_process->time.quantum == 0) {
+    schedule();
   }
-
-  switch (pass->state) {
-  // put it back in the priority queue if it's still active
-  case ACTIVE:
-    pass->state = READY;
-    proc_list_add(pass);
-    break;
-
-  // we'll only find a zombie proc here when it has just exited
-  case ZOMBIE:
-    // we cannot free the context we're in, so delay that operation to next time
-    pass->node.next = zombie_procs;
-    zombie_procs = pass;
-    break;
-
-  case READY:
-  case DEAD: // unreachable
-    assert(false);
-  }
-
-  // process that will take control of the execution
-  assert(!queue_empty(&process_queue));
-  struct proc *take = proc_list_out();
-  current_process = take;
-  take->state = ACTIVE;
-
-  // hand the cpu over to the newly scheduled process
-  ctx_sw(&pass->ctx, &take->ctx);
 }
 
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
@@ -224,7 +207,8 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
 
   // this process is now ready to run
   new_proc->state = READY;
-  proc_list_add(new_proc);
+  new_proc->time.quantum = QUANTUM;
+  PROC_ENQUEUE_READY(new_proc);
 
   // check if the new process should be run immediately or not
   if (current_process->pid != 0 &&
@@ -249,14 +233,17 @@ int chprio(int pid, int newprio)
   proc->priority = newprio;
 
   // Priority of an activable process has been changed
+  // TODO: what if it wasn't ready?
   if (proc != current_process) {
     assert(proc->state == READY);
-    proc_list_del(proc); // Remove process from its current queue
-    proc_list_add(proc); // Place it again with the updated priority
+    PROC_CLEAR_QUEUE(proc);   // Remove process from its current queue
+    PROC_ENQUEUE_READY(proc); // Place it again with the updated priority
     if (proc->priority > current_process->priority) schedule();
 
     // Priority of running process changed and it shouldn't be running anymore
-  } else if (current_process->priority < proc_list_top()->priority) {
+  } else if (PROC_READY_TOP() != NULL &&
+             current_process->priority < PROC_READY_TOP()->priority)
+  {
     assert(proc->state == ACTIVE);
     schedule();
   }
@@ -295,16 +282,17 @@ int kill(int pid)
   if (pid < 1 || pid > NBPROC) return -1;
   struct proc *proc = &process_table[pid];
   switch (proc->state) {
-  case DEAD:
-    return -1; // invalid pid
-  case ZOMBIE:
-    break; // can't kill what's already dead
-  case ACTIVE:
-    exit(-1); // current process just killed itself... lets just exit
+  case DEAD: // invalid pid
+    return -1;
+  case ZOMBIE: // can't kill what's already dead
     break;
+  case ACTIVE: // current process just killed itself :'( lets just exit
+    exit(-1);
+    break;
+  // when a proc isn't running, we can kill and bury it directly
   case READY:
-    // when a proc isn't running, we can kill and bury it directly
-    proc_list_del(proc);
+  case SLEEPING:
+    PROC_CLEAR_QUEUE(proc);
     proc_free(proc);
     break;
   }
@@ -323,6 +311,73 @@ void sleep(unsigned long ticks)
  * Internal function
  ******************************************************************************/
 
+static void schedule(void)
+{
+  // TODO: cli() only when going from user to kernel space
+  cli();
+
+  // process that's passing the cpu over
+  struct proc *pass = current_process;
+  assert(pass != NULL);
+
+  // check whether there are zombies to bury
+  while (zombie_procs != NULL) {
+    struct proc *zombie = zombie_procs;
+    assert(zombie != pass);
+    zombie_procs = zombie->node.next;
+    proc_free(zombie);
+  }
+
+  // check whether there are sleeping procs to wake up
+  const unsigned long time = current_clock();
+  struct proc *       proc;
+  queue_for_each(proc, &sleeping_procs, struct proc, node.queue)
+  {
+    // these are sorted by alarm, so we can stop whenever it wasn't reached yet
+    if (proc->time.alarm > time) break;
+    // otherwise we wake procs up by moving them to the ready queue
+    PROC_CLEAR_QUEUE(proc);
+    proc->state = READY;
+    proc->time.quantum = QUANTUM;
+    PROC_ENQUEUE_READY(proc);
+  }
+
+  switch (pass->state) {
+  // put it back in the priority queue if it's still active
+  case ACTIVE:
+    pass->state = READY;
+    pass->time.quantum = QUANTUM;
+    PROC_ENQUEUE_READY(pass);
+    break;
+
+  // we'll only find a zombie proc here when it has just exited
+  case ZOMBIE:
+    // we cannot free the context we're in, so delay that operation to next time
+    pass->node.next = zombie_procs;
+    zombie_procs = pass;
+    break;
+
+  // when a process goes to sleep, we put it in a separate queue
+  case SLEEPING:
+    PROC_ENQUEUE_SLEEPING(pass);
+    break;
+
+  // unreachable
+  case READY:
+  case DEAD:
+    assert(false);
+  }
+
+  // process that will take control of the execution
+  assert(!queue_empty(&ready_procs));
+  struct proc *take = PROC_DEQUEUE_READY();
+  current_process = take;
+  take->state = ACTIVE;
+
+  // hand the cpu over to the newly scheduled process
+  ctx_sw(&pass->ctx, &take->ctx);
+}
+
 static inline void proc_free(struct proc *proc)
 {
   // free resources
@@ -335,14 +390,44 @@ static inline void proc_free(struct proc *proc)
   free_procs = proc;
 }
 
-static int test(void *arg)
+static int p1(void *arg)
 {
-  const char c = *(char *)arg;
-  for (int i = 0; i < 5 * (CLOCKFREQ/SCHEDFREQ); ++i) {
-    printf("%c", c);
-    hlt();
+  (void)arg;
+  for (;;) {
+    printf(".");
+    wait_clock(MS_TO_TICKS(1 * 1000));
   }
-  return c;
+  return 1;
+}
+
+static int p2(void *arg)
+{
+  (void)arg;
+  for (;;) {
+    printf("-");
+    wait_clock(MS_TO_TICKS(2 * 1000));
+  }
+  return 2;
+}
+
+static int p3(void *arg)
+{
+  (void)arg;
+  for (;;) {
+    printf("+");
+    wait_clock(MS_TO_TICKS(5 * 1000));
+  }
+  return 3;
+}
+
+static int p4(void *arg)
+{
+  (void)arg;
+  for (;;) {
+    printf("*");
+    wait_clock(MS_TO_TICKS(10 * 1000));
+  }
+  return 4;
 }
 
 static int init(void *arg)
@@ -353,15 +438,17 @@ static int init(void *arg)
 
   int pid;
   (void)pid;
-
-  pid = start(test, 256, 1, "test_A", "A");
+  pid = start(p1, 256, 1, "P1", NULL);
+  assert(pid > 0);
+  pid = start(p2, 256, 1, "P2", NULL);
+  assert(pid > 0);
+  pid = start(p3, 256, 1, "P3", NULL);
+  assert(pid > 0);
+  pid = start(p4, 256, 1, "P4", NULL);
   assert(pid > 0);
 
-  pid = start(test, 256, 1, "test_B", "B");
-  assert(pid > 0);
-
-  pid = start(test, 256, 1, "test_C", "C");
-  assert(pid > 0);
+  wait_clock(MS_TO_TICKS(60 * 1000));
+  // TODO: kill children when waking up
 
   return 0;
 }
@@ -379,42 +466,21 @@ static int wall_clock_daemon(void *arg)
     hours %= 24;
     sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
     console_write_raw(time, 8, 24, 72);
+    wait_clock(MS_TO_TICKS(1000));
   }
   return 0;
 }
 
 static void idle(void)
 {
+  // just testing
   int pid;
   (void)pid;
-
   pid = start(wall_clock_daemon, 256, 1, "clock", NULL);
   assert(pid > 0);
-
   pid = start(init, 256, MAXPRIO, "init", (void *)42);
   assert(pid > 0);
 
-  // start
   sti();
   for (;;) hlt();
-}
-
-static inline void proc_list_add(struct proc *proc)
-{
-  queue_add(proc, &process_queue, struct proc, node.queue, priority);
-}
-
-static inline struct proc *proc_list_out(void)
-{
-  return queue_out(&process_queue, struct proc, node.queue);
-}
-
-static inline void proc_list_del(struct proc *proc)
-{
-  queue_del(proc, node.queue);
-}
-
-static inline struct proc *proc_list_top(void)
-{
-  return queue_top(&process_queue, struct proc, node.queue);
 }

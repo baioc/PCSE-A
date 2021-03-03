@@ -76,8 +76,8 @@ int getprio(int pid);
  */
 int getpid(void);
 
-/// Makes the current process yield the CPU to the scheduler.
-void schedule(void);
+/// Ticks the current process time, may end up calling the scheduler.
+void process_tick(void);
 
 /// Makes the current process yield the CPU for at least TICKS jiffies.
 void sleep(unsigned long ticks);

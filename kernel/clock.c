@@ -92,6 +92,6 @@ void clock_tick(void)
   // intr acknowledgement
   acknowledge_interrupt(0);
 
-  // run the scheduler after each quantum
-  if (g_jiffies % (CLOCKFREQ / SCHEDFREQ) == 0) schedule();
+  // increment process time
+  process_tick();
 }
