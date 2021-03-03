@@ -256,20 +256,25 @@ int chprio(int pid, int newprio)
 
   proc->priority = newprio;
 
-  // Priority of an activable process has been changed
-  // TODO: what if it wasn't ready?
-  if (proc != current_process) {
-    assert(proc->state == READY);
-    PROC_CLEAR_QUEUE(proc);   // Remove process from its current queue
-    PROC_ENQUEUE_READY(proc); // Place it again with the updated priority
+  switch (proc->state) {
+  case ACTIVE: // check whether current process shouldn't be running anymore
+    if (PROC_READY_TOP() != NULL &&
+        current_process->priority < PROC_READY_TOP()->priority)
+    {
+      schedule();
+    }
+    break;
+  case READY:
+    PROC_CLEAR_QUEUE(proc);   // remove process from the ready queue
+    PROC_ENQUEUE_READY(proc); // place it again with the updated priority
     if (proc->priority > current_process->priority) schedule();
-
-    // Priority of running process changed and it shouldn't be running anymore
-  } else if (PROC_READY_TOP() != NULL &&
-             current_process->priority < PROC_READY_TOP()->priority)
-  {
-    assert(proc->state == ACTIVE);
-    schedule();
+    break;
+  case SLEEPING: // new priority will take effect after it wakes up
+    break;
+  case ZOMBIE: // this whole thing was useless
+    break;
+  case DEAD: // unreachable
+    assert(false);
   }
 
   RETURN_TO_USERSPACE(old_prio);
