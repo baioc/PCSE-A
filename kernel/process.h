@@ -2,7 +2,7 @@
  * process.h
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc
  */
 
 #ifndef _process_H_
@@ -18,9 +18,11 @@
  * Macros
  ******************************************************************************/
 
-// TODO make sure that kernel will support 1000 processes by the end of project
-#define NBPROC  30
+/// Max scheduling priority (min is 1).
 #define MAXPRIO 256
+
+/// Scheduling frequency in Hz, meaning a quantum is 1/SCHEDFREQ seconds.
+#define SCHEDFREQ 50
 
 /*******************************************************************************
  * Types
@@ -34,22 +36,25 @@
  * Prototypes
  ******************************************************************************/
 
+/// Initializes the process management subsystem and moves to process "idle".
+void process_init(void);
+
 /*
  * Create a process
  * pt_func : main function of process
  * ssize : size of stack
  * prio : priority of process for execution
- * name : name of process
+ * name : name of process, must be null-terminated
  * arg : arguments passed to the main function pt_func
  */
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg);
 
-/*
- * Initialize the system with the main process "idle"
- * For now, also creates two other processes A and B
- */
-void process_init();
+/// Terminates the current process with the given exit code.
+void exit(int retval);
+
+/// Kills the process with the given pid, returning 0 on success.
+int kill(int pid);
 
 /*
  * Change priority of process referenced by pid to the value newprio
@@ -71,10 +76,7 @@ int getprio(int pid);
  */
 int getpid(void);
 
-/*
- * First draft of scheduling function
- * For now, there are only three differents processes (idle, A and B)
- */
-void schedule();
+/// Makes the current process yield the CPU to the scheduler.
+void schedule(void);
 
 #endif /* _process_H_ */

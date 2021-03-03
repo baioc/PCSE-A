@@ -14,6 +14,7 @@
 #include "cpu.h"
 #include "stdint.h"
 #include "interrupts.h"
+#include "process.h"
 
 extern void clock_tick_handler(void);
 
@@ -85,4 +86,7 @@ void clock_tick(void)
 
   // intr acknowledgement
   acknowledge_interrupt(0);
+
+  // run the scheduler after each quantum
+  if (g_jiffies % (CLOCKFREQ / SCHEDFREQ) == 0) schedule();
 }
