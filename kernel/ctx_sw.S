@@ -4,7 +4,7 @@
 #   %esp + 4 : old process context address
 #   %esp + 8 : new process context address
 ctx_sw:
-    # we don't need to save %eax, %edx or %ecx since this is a function call
+    # we don't need to save temp registers since this is a function call
     movl 4(%esp), %eax
     movl %ebx, (%eax)
     movl %esp, 4(%eax)
@@ -29,4 +29,4 @@ ctx_sw:
 # the exiting process' main routine and pass it correctly to the real exit().
 proc_exit:
     pushl %eax
-    jmp exit
+    call exit
