@@ -15,6 +15,7 @@
 #include "clock.h"
 #include "cpu.h"
 #include "console.h"
+#include "process.h"
 
 /*******************************************************************************
  * Macros
@@ -31,7 +32,7 @@
 /*
  * Activates clock for 5 seconds
  */
-void test_clock_count_for_five();
+static int test_clock_count_for_five(void *arg);
 
 /*******************************************************************************
  * Variables
@@ -46,7 +47,7 @@ void test_clock_count_for_five();
  */
 void test_clock()
 {
-  test_clock_count_for_five();
+  start(test_clock_count_for_five, 0, MAXPRIO, "test_clock_count_for_five", 0);
 }
 
 /*******************************************************************************
@@ -56,14 +57,13 @@ void test_clock()
 /*
  * Activates clock for 5 seconds
  */
-void test_clock_count_for_five()
+static int test_clock_count_for_five(void *arg)
 {
-  // enable interrupts and begin handler daemon
-  sti();
+  (void)arg;
+
   char time[] = "HH:MM:SS";
   for (int i = 0; i < CLOCKFREQ * 5; i++) {
     hlt();
-
     unsigned seconds = current_clock() / CLOCKFREQ;
     unsigned minutes = seconds / 60;
     seconds %= 60;
@@ -73,6 +73,6 @@ void test_clock_count_for_five()
     sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
     console_write_raw(time, 8, 24, 72);
   }
-  // deactivate interrupts
-  cli();
+
+  return 0;
 }

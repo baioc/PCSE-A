@@ -37,7 +37,7 @@ static int test_0(void *arg);
 
 void run_userspace_tests()
 {
-  start(test_0, 0, MAXPRIO, "test_0", 0);
+  start(test_0, 0, 128, "test_0", 0);
 }
 
 /*******************************************************************************
