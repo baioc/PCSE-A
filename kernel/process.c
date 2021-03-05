@@ -19,6 +19,10 @@
 
 #include "malloc.c"
 
+#ifdef KERNEL_TEST
+#include "kernel_tests.h"
+#endif
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -379,6 +383,9 @@ static void idle(void)
   int pid;
   (void)pid;
 
+#ifdef KERNEL_TEST
+  kernel_run_process_tests();
+#endif
   pid = start(wall_clock_daemon, 256, 1, "clock", NULL);
   assert(pid > 0);
 

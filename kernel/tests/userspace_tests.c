@@ -1,7 +1,7 @@
 /*
- * kernel_tests.c
+ * userspace_tests.c
  *
- *  Created on: 11/02/2021
+ *  Created on: 26/02/2021
  *      Author: Thibault Cantori
  */
 
@@ -9,10 +9,9 @@
  * Includes
  ******************************************************************************/
 
-#include "kernel_tests.h"
-#include "test_console.h"
-#include "test_clock.h"
 #include "userspace_tests.h"
+#include "process.h"
+#include "debug.h"
 
 /*******************************************************************************
  * Macros
@@ -26,6 +25,8 @@
  * Internal function declaration
  ******************************************************************************/
 
+static int test_0(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -33,17 +34,37 @@
 /*******************************************************************************
  * Public function
  ******************************************************************************/
-void kernel_run_general_tests()
+
+void run_userspace_tests()
 {
-  test_console();
-  test_clock();
+  start(test_0, 0, MAXPRIO, "test_0", 0);
 }
 
-void kernel_run_process_tests()
-{
-  // Run imported tests from user/tests directory
-  run_userspace_tests();
-}
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
+
+static int test_0(void *arg)
+{
+  (void)arg;
+  register unsigned reg1 = 1u;
+  register unsigned reg2 = 0xFFFFFFFFu;
+  register unsigned reg3 = 0xBADB00B5u;
+  register unsigned reg4 = 0xDEADBEEFu;
+
+  printf("I'm a simple process running ...");
+
+  unsigned i;
+  for (i = 0; i < 10000000; i++) {
+    if (reg1 != 1u || reg2 != 0xFFFFFFFFu || reg3 != 0xBADB00B5u ||
+        reg4 != 0xDEADBEEFu)
+    {
+      printf(" and I feel bad. Bybye ...\n");
+      assert(0);
+    }
+  }
+
+  printf(" and I'm healthy. Leaving.\n");
+
+  return 0;
+}

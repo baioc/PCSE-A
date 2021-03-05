@@ -145,6 +145,11 @@ $(OUTPUT)/%.o: %.S | $(OUTPUT)
 $(OUTPUT)/start.o: start.c | $(OUTPUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+# Always rebuild process.c so that KERNEL_TEST macro is taken into account
+.PHONY: $(OUTPUT)/process.o
+$(OUTPUT)/process.o: process.c | $(OUTPUT)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
 # A text screen for exception dump
 $(OUTPUT)/task_dump_screen.o: $(OUTPUT)/empty.o task_dump_screen.txt
 	$(OBJCOPY) $< \

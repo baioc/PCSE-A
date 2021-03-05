@@ -27,6 +27,9 @@
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
- void kernel_run_tests();
+
+void kernel_run_general_tests();
+
+void kernel_run_process_tests();
 
 #endif /* _kernel_tests_H_ */
