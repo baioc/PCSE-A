@@ -521,9 +521,7 @@ static void idle(void)
 #endif
 
   // idle must start init
-  const int pid = start(init, 256, 1, "init", NULL);
-  (void)pid;
-  assert(pid == 1);
+  start(init, 256, 1, "init", NULL);
 
   // and then stay idle forever
   sti();

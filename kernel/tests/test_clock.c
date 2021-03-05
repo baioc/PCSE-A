@@ -62,8 +62,7 @@ static int test_clock_count_for_five(void *arg)
   (void)arg;
 
   char time[] = "HH:MM:SS";
-  for (int i = 0; i < CLOCKFREQ * 5; i++) {
-    hlt();
+  for (int i = 0; i < 5; i++) {
     unsigned seconds = current_clock() / CLOCKFREQ;
     unsigned minutes = seconds / 60;
     seconds %= 60;
@@ -72,6 +71,7 @@ static int test_clock_count_for_five(void *arg)
     hours %= 24;
     sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
     console_write_raw(time, 8, 24, 72);
+    wait_clock(MS_TO_TICKS(1000));
   }
 
   return 0;
