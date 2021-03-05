@@ -3,10 +3,8 @@
 # Stack structure:
 #   %esp + 4 : old process context address
 #   %esp + 8 : new process context address
-# We suppose this is being called from an interrupt such that %eflags was saved
-# when the interrupt handler began and will be restored on `iret`.
 ctx_sw:
-    # we don't need to save %eax, %edx or %ecx since this is a function call
+    # we don't need to save temp registers since this is a function call
     movl 4(%esp), %eax
     movl %ebx, (%eax)
     movl %esp, 4(%eax)
@@ -25,11 +23,10 @@ ctx_sw:
     # give the cpu to the process by returning to it with the updated %esp
     ret
 
-
     .text
     .globl proc_exit
 # The sole reason this needs to be in assembly is to get the return value from
 # the exiting process' main routine and pass it correctly to the real exit().
 proc_exit:
     pushl %eax
-    jmp exit
+    call exit

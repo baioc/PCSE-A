@@ -75,6 +75,11 @@ unsigned long current_clock(void)
   return g_jiffies;
 }
 
+void wait_clock(unsigned long clock)
+{
+  sleep(clock);
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
@@ -87,6 +92,6 @@ void clock_tick(void)
   // intr acknowledgement
   acknowledge_interrupt(0);
 
-  // run the scheduler after each quantum
-  if (g_jiffies % (CLOCKFREQ / SCHEDFREQ) == 0) schedule();
+  // increment process time
+  process_tick();
 }
