@@ -11,13 +11,15 @@
 
 #include "process.h"
 
+#include "stddef.h"
 #include "debug.h"
-#include "queue.h"
 #include "cpu.h"
+#include "queue.h"
+#include "mem.h"
+#include "string.h"
+#include "stdbool.h"
 #include "clock.h"
 #include "console.h"
-
-#include "malloc.c"
 
 /*******************************************************************************
  * Macros
