@@ -11,6 +11,9 @@
 
 #include "process.h"
 
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
 typedef struct _proc proc;
 typedef struct _context context;
 /*******************************************************************************
@@ -54,10 +57,6 @@ typedef struct _context context;
 // Adds process pointed to by C to the list of P's children.
 #define ADD_CHILD(c, p) \
   queue_add((c), &(p)->children, proc, siblings, state)
-
-/*******************************************************************************
- * Types
- ******************************************************************************/
 
 /*******************************************************************************
  * Internal function declaration
@@ -105,10 +104,9 @@ static proc process_table[NBPROC + 1];
 static proc *current_process = NULL;
 
 // Process disjoint lists.
-static link ready_procs;
 static link free_procs;
 static link sleeping_procs;
-
+static link ready_procs;
 /*******************************************************************************
  * Public function
  ******************************************************************************/

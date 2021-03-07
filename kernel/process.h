@@ -22,6 +22,7 @@
 #include "stdbool.h"
 #include "clock.h"
 #include "console.h"
+#include "sem.h"
 
 /*******************************************************************************
  * Macros
@@ -77,7 +78,7 @@
    struct _proc *parent;
    link         children;
    link         siblings;
-   link         blocked;
+   link         blocked; // if blocked by a semaphore
    int          retval;
  };
  typedef struct _proc proc;
