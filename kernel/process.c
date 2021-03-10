@@ -106,7 +106,7 @@ static proc *current_process = NULL;
 // Process disjoint lists.
 static link free_procs;
 static link sleeping_procs;
-static link ready_procs;
+link ready_procs;
 /*******************************************************************************
  * Public function
  ******************************************************************************/
