@@ -104,8 +104,8 @@ static proc process_table[NBPROC + 1];
 static proc *current_process = NULL;
 
 // Process disjoint lists.
-static link free_procs;
-static link sleeping_procs;
+link free_procs;
+link sleeping_procs;
 link ready_procs;
 /*******************************************************************************
  * Public function
