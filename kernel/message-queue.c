@@ -52,6 +52,7 @@
    int *m_queue;
    int lenght;
    int id_send;
+   int nb_send;
    int id_received;
  };
 
@@ -75,24 +76,65 @@ static link indice_used_gestion;
  ******************************************************************************/
 
  int pcreate(int count){
+   // id the lenght "count" is not valid or if there is not space to create a
+   // new messsage queue, return -1
    if(count <= 0 || queue_empty(&indice_unused_gestion)){
      return -1;
    }
+
+   // we get the lowest possible indice to create the new message queue
    int fid = ((struct indice_queue_tab *)MQUEUE_UNUSED_ID_PRIOR())->indice;
 
+   // we initiase the new message queue
    queue_tab[fid] = mem_alloc(sizeof(struct message_queue));
    queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*count);
    queue_tab[fid]->lenght = count;
-   queue_tab[fid]->id_send = 0;
-   queue_tab[fid]->id_received = 0;
+   queue_tab[fid]->id_send = -1;
+   queue_tab[fid]->nb_send = 0;
+   queue_tab[fid]->id_received = -1;
 
+   // the structure corresponding to the indice we just used is move from the
+   // queue of the unused indice to the queue of the used indice
    MQUEUE_USED_ID_ADD(MQUEUE_UNUSED_ID_REMOVE());
 
+   // we return the valid fid to use the new message queue
    return fid;
  }
 
- void psend(int fid, int message){
-   queue_tab[fid]->m_queue[0] = message;
+ int psend(int fid, int message){
+   // if the given fid is incorrect, return -1
+   if(valid_fid(fid) != 0){
+     return -1;
+   }
+
+   // if the queue is not full, we save the message and return 0
+   if(queue_tab[fid]->nb_send != queue_tab[fid]->lenght){
+     queue_tab[fid]->nb_send ++;
+     queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
+     queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+     return 0;
+   }
+
+   // the fid is correct but the queue is full --> we will see that later
+   return -1;
+ }
+
+ int preceive(int fid, int *message){
+   // if the given fid is incorrect, return -1
+   if(valid_fid(fid) != 0){
+     return -1;
+   }
+
+   // if the queue is not empty, we get the message and return 0
+   if(queue_tab[fid]->nb_send != 0){
+     queue_tab[fid]->nb_send --;
+     queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
+     *message = queue_tab[fid]->id_received;
+     return 0;
+   }
+
+   // the fid is correct but the queue is empty --> we will see that later
+   return -1;
  }
 
 /*******************************************************************************
@@ -111,7 +153,7 @@ void init_indice_gestion_list(){
   }
 }
 
-// Print all the indice of the list
+// Print all the unused indice
 void print_unused_indice_gestion_list(){
   struct indice_queue_tab* indice_iterator;
   queue_for_each(indice_iterator, &indice_unused_gestion, struct indice_queue_tab, node){
@@ -119,6 +161,7 @@ void print_unused_indice_gestion_list(){
   }
 }
 
+// Return 0 if the given fid is valid, -1 otherwise
 int valid_fid(int fid){
   struct indice_queue_tab* indice_iterator;
   queue_for_each(indice_iterator, &indice_used_gestion, struct indice_queue_tab, node){
