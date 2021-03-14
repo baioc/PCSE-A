@@ -1,7 +1,7 @@
 /*
- * m-queue.c
+ * message-queue.c
  *
- *  Created on: 4/03/2021
+ *  Created on: 10/03/2021
  *      Authors: Maxime Martin
  */
 
@@ -134,6 +134,30 @@ static link indice_used_gestion;
    }
 
    // the fid is correct but the queue is empty --> we will see that later
+   return -1;
+ }
+
+ int pdelete(int fid){
+   // if the given fid is incorrect, return -1
+   if(valid_fid(fid) != 0){
+     return -1;
+   }
+
+   // we delete the message queue corresponding to fid
+   mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
+   mem_free(queue_tab[fid], sizeof(struct message_queue));
+
+   // the fid indice can now be used by a new message queue
+   struct indice_queue_tab* indice_iterator;
+   queue_for_each(indice_iterator, &indice_used_gestion, struct indice_queue_tab, node){
+     if(indice_iterator->indice == fid){
+       queue_del(indice_iterator, node);
+       MQUEUE_UNUSED_ID_ADD(indice_iterator);
+       return 0;
+     }
+   }
+
+   // there was a problem, we didn't find the used id fid in the used ids queue
    return -1;
  }
 
