@@ -43,6 +43,8 @@
 
  int pdelete(int fid);
 
+ int preset(int fid);
+
  void init_indice_gestion_list();
 
  void print_unused_indice_gestion_list();

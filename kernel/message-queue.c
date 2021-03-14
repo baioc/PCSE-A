@@ -161,6 +161,21 @@ static link indice_used_gestion;
    return -1;
  }
 
+ int preset(int fid){
+   // if the given fid is incorrect, return -1
+   if(valid_fid(fid) != 0){
+     return -1;
+   }
+
+   // we reset all the atributes of the message queue fid
+   mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght * sizeof(int));
+   queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*queue_tab[fid]->lenght);
+   queue_tab[fid]->id_send = -1;
+   queue_tab[fid]->nb_send = 0;
+   queue_tab[fid]->id_received = -1;
+   return 0;
+ }
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
@@ -198,6 +213,7 @@ int valid_fid(int fid){
 
 void test(){
   printf("%i\n", queue_tab[0]->m_queue[0]);
+  printf("%i\n", queue_tab[0]->m_queue[1]);
   printf("%i\n", valid_fid(0));
   printf("%i\n", valid_fid(1));
 }
