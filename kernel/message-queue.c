@@ -60,6 +60,13 @@
  * Internal function declaration
  ******************************************************************************/
 
+void init_indice_gestion_list();
+
+void print_unused_indice_gestion_list();
+
+int valid_fid(int fid);
+
+void test();
 
 /*******************************************************************************
  * Variables
