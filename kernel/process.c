@@ -38,17 +38,6 @@
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
-// TODO: remove these when we actually have separated user and kernel spaces
-#define COME_FROM_USERSPACE() \
-  do {                        \
-    cli();                    \
-  } while (0)
-#define RETURN_TO_USERSPACE(ret) \
-  do {                           \
-    sti();                       \
-    return (ret);                \
-  } while (0)
-
 // Adds process pointed to by P into the ready priority queue.
 #define PROC_ENQUEUE_READY(p) \
   queue_add((p), &ready_procs, struct proc, node, priority)
@@ -199,12 +188,7 @@ void process_init(void) // only called from kernel space
 void process_tick(void)
 {
   // assuming this is only called from ISRs, we're already in kernel space
-  // assert(current_process->state == ACTIVE);
-
-  // since we don't use COME_FROM_USERSPACE and RETURN_TO_USERSPACE anymore
-  // process can be interrupted during kernel operations (and process state can
-  // be different of ACTIVE...)
-  if (current_process->state != ACTIVE) return;
+  assert(current_process->state == ACTIVE);
 
   if (current_process->time.quantum == 0 ||
       --current_process->time.quantum == 0) {
@@ -385,7 +369,7 @@ int waitpid(int pid, int *retvalp)
           printf("found %d!\n", child->pid);
           if (retvalp != NULL) *retvalp = child->retval;
           destroy(child);
-          RETURN_TO_USERSPACE(child->pid);
+          return child->pid;
         }
       }
 

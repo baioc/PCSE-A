@@ -18,8 +18,6 @@ ctx_sw:
     movl 8(%eax), %ebp
     movl 12(%eax), %esi
     movl 16(%eax), %edi
-    # make sure interrupts are enabled before yielding
-    sti
     # give the cpu to the process by returning to it with the updated %esp
     ret
 
