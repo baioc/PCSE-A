@@ -39,7 +39,21 @@ debug: all
 	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
 
 run: all
-	qemu-system-i386 -curses -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S
+	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
+	$(GDB) kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "continue"
 
 run_gdb:
 	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
+
+# Rules to run kernel tests
+tests: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
+	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
+	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE) KERNEL_TEST=1
+
+debug_tests: tests
+	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
+	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
+
+run_tests: tests
+	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
+	$(GDB) kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "continue"
