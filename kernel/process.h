@@ -46,6 +46,7 @@
  // Describe different states of a process
  typedef enum _proc_state {
    DEAD,           // marks a free process slot
+   BLOCKED,        // process is blocked by a semaphore
    ZOMBIE,         // terminated but still in use
    SLEEPING,       // process is waiting on its alarm
    AWAITING_CHILD, // process is waiting for one of its children
@@ -95,6 +96,13 @@ void process_init(void);
 
 /// Ticks the current process time, may end up calling the scheduler.
 void process_tick(void);
+
+/**
+ * Makes the current process yield the CPU to the scheduler.
+ * NOTE: this routine supposes interrupts are disabled and will re-enable them
+ * when switching context back to user space.
+ */
+void schedule(void);
 
 /*
  * Create a process

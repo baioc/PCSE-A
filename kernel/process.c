@@ -68,13 +68,6 @@ extern void ctx_sw(context *old, context *new);
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
 
-/**
- * Makes the current process yield the CPU to the scheduler.
- * NOTE: this routine supposes interrupts are disabled and will re-enable them
- * when switching context back to user space.
- */
-static void schedule(void);
-
 // Starts 'init', enables interrupts and loops indefinitely.
 static void idle(void);
 
@@ -101,7 +94,7 @@ static proc process_table[NBPROC + 1];
 #define INIT_PROC (&process_table[1])
 
 // Current process running on processor.
-static proc *current_process = NULL;
+proc *current_process = NULL;
 
 // Process disjoint lists.
 link free_procs;
@@ -238,6 +231,7 @@ int chprio(int pid, int newprio)
   // new priority will take effect when it wakes up
   case AWAITING_CHILD:
   case SLEEPING:
+  case BLOCKED:
   case ZOMBIE:
     break;
   case DEAD: // unreachable
@@ -288,6 +282,8 @@ int kill(int pid)
     break;
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
+    break;
+  case BLOCKED: // Not the good solution
     break;
   case READY:
   case SLEEPING:
@@ -358,11 +354,7 @@ int waitpid(int pid, int *retvalp)
   }
 }
 
-/*******************************************************************************
- * Internal function
- ******************************************************************************/
-
-static void schedule(void)
+void schedule(void)
 {
   // process that's passing the cpu over
   proc *pass = current_process;
@@ -401,6 +393,12 @@ static void schedule(void)
     }
     break;
 
+  // we'll only find a blocked proc here when it has just been blocked
+  case BLOCKED:
+    printf("\n* %s(%d) just blocked *\n", pass->name, pass->pid);
+    queue_del(pass, node); // delete it from ready proc's list
+    break;
+
   // when a process goes to sleep, we put it in a separate queue
   case SLEEPING:
     PROC_ENQUEUE_SLEEPING(pass);
@@ -425,6 +423,10 @@ static void schedule(void)
   // hand the cpu over to the newly scheduled process
   ctx_sw(&pass->ctx, &take->ctx);
 }
+
+/*******************************************************************************
+ * Internal function
+ ******************************************************************************/
 
 static void zombify(proc *p, int retval)
 {

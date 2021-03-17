@@ -34,7 +34,6 @@
  /*******************************************************************************
   * Variables
   ******************************************************************************/
-  extern link ready_procs;
  /*******************************************************************************
   * Public function
   ******************************************************************************/
@@ -46,12 +45,12 @@
   Delete a semaphore
   */
   int sdelete(int sem);
-  int sreset(semaph sem,short int count);
+  int sreset(int sem,short int count);
   int signal(int sem);
   int signaln(int sem,short int count);
   int try_wait(int sem);
   int wait(int sem);
-  int scount(semaph sem);
+  int scount(int sem);
  /*******************************************************************************
   * Internal function
   ******************************************************************************/
