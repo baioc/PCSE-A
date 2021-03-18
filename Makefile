@@ -1,4 +1,7 @@
-.PHONY: clean all debug run run_gdb
+.PHONY: all clean build test run debug gdb
+
+# default rule
+all: test
 
 # Output directory for each submakefiles
 OUTPUT := out
@@ -14,15 +17,11 @@ export PLATFORM_TOOLS
 
 ifeq ($(OS_PCSEA),macOS)
 GDB=i386-pc-elf-gdb
-endif
-
-ifeq ($(OS_PCSEA),)
+else
 GDB=gdb
 endif
 
-all: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
-	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
-	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE)
+QEMU=qemu-system-i386 -cpu pentium -m 256M
 
 kernel/$(PLATFORM_TOOLS):
 	$(MAKE) -C kernel/ $(PLATFORM_TOOLS)
@@ -34,26 +33,34 @@ clean:
 	$(MAKE) clean -C kernel/
 	$(MAKE) clean -C user/
 
-debug: all
-	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
-	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
+#
+# Build modes are EITHER 'build' or 'test'.
+# A 'clean' is needed when changing between them.
+#
+build: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
+	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
+	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE)
 
-run: all
-	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
-	$(GDB) kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "continue"
-
-run_gdb:
-	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
-
-# Rules to run kernel tests
-tests: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
+test: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
 	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
 	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE) KERNEL_TEST=1
 
-debug_tests: tests
-	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
-	$(GDB) --tui -f kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "tbreak kernel_start" -ex "continue"
+#
+# 'run' and 'debug' rules require the kernel to be already built, for example:
+# - "make build run" builds the non-test kernel and runs qemu WITHOUT gdb
+# - since we'll follow up with a test build: "make clean test"
+# - "make debug & make gdb" runs the built kernel WITH gdb
+#
+run:
+	$(QEMU) -kernel kernel/kernel.bin
 
-run_tests: tests
-	qemu-system-i386 -cpu pentium -kernel kernel/kernel.bin -m 256M -gdb tcp::1234 -S &
-	$(GDB) kernel/kernel.bin -ex "target remote localhost:1234" -ex "dir kernel" -ex "continue"
+debug:
+	$(QEMU) -kernel kernel/kernel.bin -gdb tcp::1234 -S
+
+# connects gdb to an already-running qemu process on localhost:1234
+gdb:
+	$(GDB) --tui -f kernel/kernel.bin \
+	       -ex "dir kernel" \
+	       -ex "target remote localhost:1234" \
+	       -ex "break panic" \
+	       -ex "tbreak kernel_start" -ex "continue"
