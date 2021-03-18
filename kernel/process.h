@@ -13,6 +13,16 @@
  ******************************************************************************/
 
 #include "stdint.h"
+#include "stddef.h"
+#include "debug.h"
+#include "cpu.h"
+#include "queue.h"
+#include "mem.h"
+#include "string.h"
+#include "stdbool.h"
+#include "clock.h"
+#include "console.h"
+#include "sem.h"
 
 /*******************************************************************************
  * Macros
@@ -24,10 +34,55 @@
 /// Scheduling frequency in Hz, meaning a quantum is 1/SCHEDFREQ seconds.
 #define SCHEDFREQ 50
 
+// Total number of kenel processes.
+#define NBPROC 1000
+
+// Kernel stack size, in words.
+#define STACK_SIZE 512
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
+ // Describe different states of a process
+ typedef enum _proc_state {
+   DEAD,           // marks a free process slot
+   BLOCKED,        // process is blocked by a semaphore
+   ZOMBIE,         // terminated but still in use
+   SLEEPING,       // process is waiting on its alarm
+   AWAITING_CHILD, // process is waiting for one of its children
+   READY,          // process waiting for his turn
+   ACTIVE,         // process currently running on processor
+ } proc_state;
 
+ // NOTE: must be kept in sync with ctx_sw()
+ struct _context {
+   unsigned ebx;
+   unsigned esp;
+   unsigned ebp;
+   unsigned esi;
+   unsigned edi;
+ };
+ typedef struct _context context;
+
+ struct _proc {
+   int             pid;
+   proc_state      state;
+   char *          name;
+   context         ctx; // execution context registers
+   unsigned *      kernel_stack;
+   int             priority; // scheduling priority
+   union {
+     unsigned long quantum; // remaining cpu time (in ticks) for this proc
+     unsigned long alarm;   // timestamp (in ticks) to wake a sleeping process
+   } time;
+   link         node; // doubly-linked node used by lists
+   struct _proc *parent;
+   link         children;
+   link         siblings;
+   link         blocked; // if blocked by a semaphore
+   int          retval;
+ };
+ typedef struct _proc proc;
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -41,6 +96,13 @@ void process_init(void);
 
 /// Ticks the current process time, may end up calling the scheduler.
 void process_tick(void);
+
+/**
+ * Makes the current process yield the CPU to the scheduler.
+ * NOTE: this routine supposes interrupts are disabled and will re-enable them
+ * when switching context back to user space.
+ */
+void schedule(void);
 
 /*
  * Create a process

@@ -11,117 +11,55 @@
 
 #include "process.h"
 
-#include "stddef.h"
-#include "debug.h"
-#include "cpu.h"
-#include "queue.h"
-#include "mem.h"
-#include "string.h"
-#include "stdbool.h"
-#include "clock.h"
-#include "console.h"
-
-#ifdef KERNEL_TEST
-#include "kernel_tests.h"
-#endif
-
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
+typedef struct _proc proc;
+typedef struct _context context;
 /*******************************************************************************
  * Macros
  ******************************************************************************/
-
-// Total number of kenel processes.
-#define NBPROC 1000
-
-// Kernel stack size, in words.
-#define STACK_SIZE 512
 
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
 // Adds process pointed to by P into the ready priority queue.
 #define PROC_ENQUEUE_READY(p) \
-  queue_add((p), &ready_procs, struct proc, node, priority)
+  queue_add((p), &ready_procs, proc, node, priority)
 
 // Pops and returns the highest-priority process from the ready queue.
-#define PROC_DEQUEUE_READY() (queue_out(&ready_procs, struct proc, node))
+#define PROC_DEQUEUE_READY() (queue_out(&ready_procs, proc, node))
 
 // References the highest-priority process in a queue.
-#define PROC_READY_TOP() (queue_top(&ready_procs, struct proc, node))
+#define PROC_READY_TOP() (queue_top(&ready_procs, proc, node))
 
 // Adds process pointed to by P into the sleeping queue, sorted by its alarm.
 #define PROC_ENQUEUE_SLEEPING(p) \
-  queue_add((p), &sleeping_procs, struct proc, node, time.alarm)
+  queue_add((p), &sleeping_procs, proc, node, time.alarm)
 
 // Adds process pointed to by P into the free queue, sorted by its pid.
-#define PROC_ENQUEUE_FREE(p) queue_add((p), &free_procs, struct proc, node, pid)
+#define PROC_ENQUEUE_FREE(p) queue_add((p), &free_procs, proc, node, pid)
 
 // References the lowest-pid process in the free list.
-#define PROC_FREE_FIRST() (queue_bottom(&free_procs, struct proc, node))
+#define PROC_FREE_FIRST() (queue_bottom(&free_procs, proc, node))
 
 // Adds process pointed to by C to the list of P's children.
 #define ADD_CHILD(c, p) \
-  queue_add((c), &(p)->children, struct proc, siblings, state)
+  queue_add((c), &(p)->children, proc, siblings, state)
 
 // Remove process referenced by c from the list of its parent
 #define REMOVE_CHILD(c) queue_del((c), siblings)
 
-/*******************************************************************************
- * Types
- ******************************************************************************/
-
-// Describe different states of a process
-enum proc_state {
-  DEAD,           // marks a free process slot
-  ZOMBIE,         // terminated but still in use
-  SLEEPING,       // process is waiting on its alarm
-  AWAITING_CHILD, // process is waiting for one of its children
-  READY,          // process waiting for his turn
-  ACTIVE,         // process currently running on processor
-};
-
-// NOTE: must be kept in sync with ctx_sw()
-struct context {
-  unsigned ebx;
-  unsigned esp;
-  unsigned ebp;
-  unsigned esi;
-  unsigned edi;
-};
-
-struct proc {
-  int             pid;
-  enum proc_state state;
-  char *          name;
-  struct context  ctx; // execution context registers
-  unsigned *      kernel_stack;
-  int             priority; // scheduling priority
-  union {
-    unsigned long quantum; // remaining cpu time (in ticks) for this proc
-    unsigned long alarm;   // timestamp (in ticks) to wake a sleeping process
-  } time;
-  link         node; // doubly-linked node used by lists
-  struct proc *parent;
-  link         children;
-  link         siblings;
-  int          retval;
-};
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
 /// Changes context between two processes, defined in ctx_sw.S
-extern void ctx_sw(struct context *old, struct context *new);
+extern void ctx_sw(context *old, context *new);
 
 /// Defined in ctx_sw.S, this is called when a process implicitly exits.
 extern void proc_exit(void);
-
-/**
- * Makes the current process yield the CPU to the scheduler.
- * NOTE: this routine supposes interrupts are disabled and will re-enable them
- * when switching context back to user space.
- */
-static void schedule(void);
 
 // Starts 'init', enables interrupts and loops indefinitely.
 static void idle(void);
@@ -130,32 +68,31 @@ static void idle(void);
 static int init(void *);
 
 // Zombifies a process without freeing its resources.
-static void zombify(struct proc *proc, int retval);
+static void zombify(proc *p, int retval);
 
 /**
  * Kills a zombie process once and for all.
  * This means freeing any resources it owns and moving it to the free list.
  */
-static void destroy(struct proc *proc);
+static void destroy(proc *p);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
 // Table of ALL processes, indexed by their pid.
-static struct proc process_table[NBPROC + 1];
+static proc process_table[NBPROC + 1];
 
 #define IDLE_PROC (&process_table[0])
 #define INIT_PROC (&process_table[1])
 
 // Current process running on processor.
-static struct proc *current_process = NULL;
+proc *current_process = NULL;
 
 // Process disjoint lists.
-static link ready_procs;
-static link free_procs;
-static link sleeping_procs;
-
+link free_procs;
+link sleeping_procs;
+link ready_procs;
 /*******************************************************************************
  * Public function
  ******************************************************************************/
@@ -164,7 +101,7 @@ void process_init(void) // only called from kernel space
 {
   // set up initial kernel process, 'idle', which has pid 0
   *IDLE_PROC =
-      (struct proc){.name = "idle", .pid = 0, .priority = 0, .parent = NULL};
+      (proc){.name = "idle", .pid = 0, .priority = 0, .parent = NULL};
   IDLE_PROC->children = (link)LIST_HEAD_INIT(IDLE_PROC->children);
 
   // initialize process lists
@@ -172,10 +109,10 @@ void process_init(void) // only called from kernel space
   free_procs = (link)LIST_HEAD_INIT(free_procs);
   sleeping_procs = (link)LIST_HEAD_INIT(sleeping_procs);
   for (int i = 1; i <= NBPROC; ++i) { // all other procs begin dead
-    struct proc *proc = &process_table[i];
-    *proc = (struct proc){.pid = i};
-    proc->state = DEAD;
-    PROC_ENQUEUE_FREE(proc);
+    proc *p = &process_table[i];
+    *p = (proc){.pid = i};
+    p->state = DEAD;
+    PROC_ENQUEUE_FREE(p);
   }
 
   // idle is the first process to run
@@ -207,7 +144,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
 
   // bail when we can't find a free slot in the process table
   if (queue_empty(&free_procs)) return -1;
-  struct proc *new_proc = PROC_FREE_FIRST();
+  proc *new_proc = PROC_FREE_FIRST();
   queue_del(new_proc, node);
 
   // otherwise set-up its pid (implicit) and priority (explicit)
@@ -265,26 +202,27 @@ int chprio(int pid, int newprio)
     return -1;
   }
 
-  struct proc *proc = &process_table[pid];
-  if (proc->state == DEAD || proc->state == ZOMBIE) return -1;
+  proc *p = &process_table[pid];
+  if (p->state == DEAD || p->state == ZOMBIE) return -1;
 
-  const int old_prio = proc->priority;
+  const int old_prio = p->priority;
   if (newprio == old_prio) return old_prio; // change priority only if needed
 
-  proc->priority = newprio;
+  p->priority = newprio;
 
-  switch (proc->state) {
+  switch (p->state) {
   case ACTIVE: // check whether current process shouldn't be running anymore
     if (current_process->priority < PROC_READY_TOP()->priority) schedule();
     break;
   case READY:
-    queue_del(proc, node);    // remove process from the ready queue
-    PROC_ENQUEUE_READY(proc); // place it again with the updated priority
-    if (proc->priority > current_process->priority) schedule();
+    queue_del(p, node);    // remove process from the ready queue
+    PROC_ENQUEUE_READY(p); // place it again with the updated priority
+    if (p->priority > current_process->priority) schedule();
     break;
   // new priority will take effect when it wakes up
   case AWAITING_CHILD:
   case SLEEPING:
+  case BLOCKED:
   case ZOMBIE:
     break;
   case DEAD: // unreachable
@@ -297,9 +235,9 @@ int chprio(int pid, int newprio)
 int getprio(int pid)
 {
   if (pid < 1 || pid > NBPROC) return -1;
-  struct proc *proc = &process_table[pid];
-  if (proc->state == DEAD) return -1;
-  const int prio = proc->priority;
+  proc *p = &process_table[pid];
+  if (p->state == DEAD) return -1;
+  const int prio = p->priority;
   return prio;
 }
 
@@ -322,9 +260,9 @@ int kill(int pid)
 {
 
   if (pid < 1 || pid > NBPROC) return -1;
-  struct proc *proc = &process_table[pid];
+  proc *p = &process_table[pid];
 
-  switch (proc->state) {
+  switch (p->state) {
   case DEAD: // invalid pid
     return -1;
   case ZOMBIE: // can't kill what's already dead
@@ -333,13 +271,15 @@ int kill(int pid)
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
     break;
+  case BLOCKED: // Not the good solution
+    break;
   case READY:
   case SLEEPING:
-    queue_del(proc, node);
-    zombify(proc, 0);
+    queue_del(p, node);
+    zombify(p, 0);
     break;
   case AWAITING_CHILD:
-    zombify(proc, 0);
+    zombify(p, 0);
     break;
   }
 
@@ -362,8 +302,8 @@ int waitpid(int pid, int *retvalp)
 
     for (;;) {
       printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
-      struct proc *child;
-      queue_for_each(child, &current_process->children, struct proc, siblings)
+      proc *child;
+      queue_for_each(child, &current_process->children, proc, siblings)
       {
         if (child->state == ZOMBIE) {
           printf("found %d!\n", child->pid);
@@ -380,15 +320,15 @@ int waitpid(int pid, int *retvalp)
 
   } else { // reap a specific child
     if (pid < 1 || pid > NBPROC) return -1;
-    struct proc *proc = &process_table[pid];
-    if (proc->state == DEAD || proc->parent != current_process) return -1;
+    proc *p = &process_table[pid];
+    if (p->state == DEAD || p->parent != current_process) return -1;
 
     for (;;) {
       printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
-      if (proc->state == ZOMBIE) {
-	printf("found %d!\n", proc->pid);
-	if (retvalp != NULL) *retvalp = proc->retval;
-	destroy(proc);
+      if (p->state == ZOMBIE) {
+	printf("found %d!\n", p->pid);
+	if (retvalp != NULL) *retvalp = p->retval;
+	destroy(p);
 	return pid;
       }
 
@@ -399,35 +339,31 @@ int waitpid(int pid, int *retvalp)
   }
 }
 
-/*******************************************************************************
- * Internal function
- ******************************************************************************/
-
-static void schedule(void)
+void schedule(void)
 {
   // process that's passing the cpu over
-  struct proc *pass = current_process;
+  proc *pass = current_process;
   assert(pass != NULL);
 
   // check whether there are sleeping procs to wake up
   const unsigned long now = current_clock();
-  struct proc *       proc;
+  proc *       p;
   do {
-    proc = 0;
-    queue_for_each(proc, &sleeping_procs, struct proc, node)
+    p = 0;
+    queue_for_each(p, &sleeping_procs, proc, node)
     {
       // these are sorted by alarm,
       // so we can stop whenever it wasn't reached yet
-      if (proc->time.alarm > now) break;
+      if (p->time.alarm > now) break;
       // otherwise we wake procs up by moving them to the ready queue
-      queue_del(proc, node);
-      proc->state = READY;
-      proc->time.quantum = QUANTUM;
-      PROC_ENQUEUE_READY(proc);
+      queue_del(p, node);
+      p->state = READY;
+      p->time.quantum = QUANTUM;
+      PROC_ENQUEUE_READY(p);
       // an element was deleted, we need to iterate on the list again
       break;
     }
-  } while (proc->time.alarm <= now && &proc->node != &sleeping_procs);
+  } while (p->time.alarm <= now && &p->node != &sleeping_procs);
 
   switch (pass->state) {
   // put it back in the priority queue if it's still active
@@ -448,6 +384,12 @@ static void schedule(void)
     }
     break;
 
+  // we'll only find a blocked proc here when it has just been blocked
+  case BLOCKED:
+    printf("\n* %s(%d) just blocked *\n", pass->name, pass->pid);
+    queue_del(pass, node); // delete it from ready proc's list
+    break;
+
   // when a process goes to sleep, we put it in a separate queue
   case SLEEPING:
     PROC_ENQUEUE_SLEEPING(pass);
@@ -465,7 +407,7 @@ static void schedule(void)
 
   // process that will take control of the execution
   assert(!queue_empty(&ready_procs));
-  struct proc *take = PROC_DEQUEUE_READY();
+  proc *take = PROC_DEQUEUE_READY();
   current_process = take;
   take->state = ACTIVE;
 
@@ -473,16 +415,20 @@ static void schedule(void)
   ctx_sw(&pass->ctx, &take->ctx);
 }
 
-static void zombify(struct proc *proc, int retval)
+/*******************************************************************************
+ * Internal function
+ ******************************************************************************/
+
+static void zombify(proc *p, int retval)
 {
-  proc->retval = retval; // store exit code
-  proc->state = ZOMBIE;  // change its state
+  p->retval = retval; // store exit code
+  p->state = ZOMBIE;  // change its state
   // when a parent process dies, its now-orphan children are adopted by init
-  struct proc *child;
+  proc *child;
 
   // empty proc children list
   do {
-    queue_for_each(child, &proc->children, struct proc, siblings)
+    queue_for_each(child, &p->children, proc, siblings)
     {
       child->parent = INIT_PROC;
       // remove child from its parent's children list
@@ -497,23 +443,23 @@ static void zombify(struct proc *proc, int retval)
       // a child was deleted from proc's children, we need to iterate again
       break;
     }
-  } while (!queue_empty(&proc->children));
+  } while (!queue_empty(&p->children));
 }
 
-static void destroy(struct proc *proc)
+static void destroy(proc *p)
 {
-  assert(proc->state == ZOMBIE);
+  assert(p->state == ZOMBIE);
 
   // free resources
-  mem_free(proc->kernel_stack, STACK_SIZE * sizeof(int));
-  mem_free(proc->name, (strlen(proc->name) + 1) * sizeof(char));
+  mem_free(p->kernel_stack, STACK_SIZE * sizeof(int));
+  mem_free(p->name, (strlen(p->name) + 1) * sizeof(char));
 
   // remove proc from its parent children list
-  if (proc->parent != NULL) REMOVE_CHILD(proc);
+  if (p->parent != NULL) REMOVE_CHILD(p);
 
   // add it to the free list
-  proc->state = DEAD;
-  PROC_ENQUEUE_FREE(proc);
+  p->state = DEAD;
+  PROC_ENQUEUE_FREE(p);
 }
 
 static void idle(void)
