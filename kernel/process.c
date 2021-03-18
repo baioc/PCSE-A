@@ -23,17 +23,6 @@ typedef struct _context context;
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
-// TODO: remove these when we actually have separated user and kernel spaces
-#define COME_FROM_USERSPACE() \
-  do {                        \
-    cli();                    \
-  } while (0)
-#define RETURN_TO_USERSPACE(ret) \
-  do {                           \
-    sti();                       \
-    return (ret);                \
-  } while (0)
-
 // Adds process pointed to by P into the ready priority queue.
 #define PROC_ENQUEUE_READY(p) \
   queue_add((p), &ready_procs, proc, node, priority)
@@ -57,6 +46,10 @@ typedef struct _context context;
 // Adds process pointed to by C to the list of P's children.
 #define ADD_CHILD(c, p) \
   queue_add((c), &(p)->children, proc, siblings, state)
+
+// Remove process referenced by c from the list of its parent
+#define REMOVE_CHILD(c) queue_del((c), siblings)
+
 
 /*******************************************************************************
  * Internal function declaration
@@ -133,6 +126,7 @@ void process_tick(void)
 {
   // assuming this is only called from ISRs, we're already in kernel space
   assert(current_process->state == ACTIVE);
+
   if (current_process->time.quantum == 0 ||
       --current_process->time.quantum == 0) {
     schedule();
@@ -142,15 +136,14 @@ void process_tick(void)
 int start(int (*pt_func)(void *), unsigned long ssize, int prio,
           const char *name, void *arg)
 {
-  COME_FROM_USERSPACE();
 
   assert(pt_func != NULL);
   (void)ssize;
-  if (prio < 1 || prio > MAXPRIO) RETURN_TO_USERSPACE(-1);
+  if (prio < 1 || prio > MAXPRIO) return -1;
   assert(name != NULL);
 
   // bail when we can't find a free slot in the process table
-  if (queue_empty(&free_procs)) RETURN_TO_USERSPACE(-1);
+  if (queue_empty(&free_procs)) return -1;
   proc *new_proc = PROC_FREE_FIRST();
   queue_del(new_proc, node);
 
@@ -162,7 +155,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   new_proc->name = mem_alloc((strlen(name) + 1) * sizeof(char));
   if (new_proc->name == NULL) {
     PROC_ENQUEUE_FREE(new_proc);
-    RETURN_TO_USERSPACE(-1);
+    return -1;
   }
   strcpy(new_proc->name, name);
 
@@ -171,7 +164,7 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   if (new_proc->kernel_stack == NULL) {
     mem_free(new_proc->name, (strlen(new_proc->name) + 1) * sizeof(char));
     PROC_ENQUEUE_FREE(new_proc);
-    RETURN_TO_USERSPACE(-1);
+    return -1;
   }
 
   // setup stack with the given arg, termination code and main function
@@ -198,24 +191,22 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   }
 
   const int pid = new_proc->pid;
-  RETURN_TO_USERSPACE(pid);
+  return pid;
 }
 
 int chprio(int pid, int newprio)
 {
-  COME_FROM_USERSPACE();
 
   // process referenced by that pid doesn't exist, or newprio is invalid
   if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) {
-    RETURN_TO_USERSPACE(-1);
+    return -1;
   }
 
   proc *p = &process_table[pid];
-  if (p->state == DEAD) RETURN_TO_USERSPACE(-1);
+  if (p->state == DEAD || p->state == ZOMBIE) return -1;
 
   const int old_prio = p->priority;
-  if (newprio == old_prio)
-    RETURN_TO_USERSPACE(old_prio); // change priority only if needed
+  if (newprio == old_prio) return old_prio; // change priority only if needed
 
   p->priority = newprio;
 
@@ -238,29 +229,26 @@ int chprio(int pid, int newprio)
     assert(false);
   }
 
-  RETURN_TO_USERSPACE(old_prio);
+  return old_prio;
 }
 
 int getprio(int pid)
 {
-  COME_FROM_USERSPACE();
-  if (pid < 1 || pid > NBPROC) RETURN_TO_USERSPACE(-1);
-  proc *proc = &process_table[pid];
-  if (proc->state == DEAD) RETURN_TO_USERSPACE(-1);
-  const int prio = proc->priority;
-  RETURN_TO_USERSPACE(prio);
+  if (pid < 1 || pid > NBPROC) return -1;
+  proc *p = &process_table[pid];
+  if (p->state == DEAD) return -1;
+  const int prio = p->priority;
+  return prio;
 }
 
 int getpid(void)
 {
-  COME_FROM_USERSPACE();
   const int pid = current_process->pid;
-  RETURN_TO_USERSPACE(pid);
+  return pid;
 }
 
 void exit(int retval)
 {
-  COME_FROM_USERSPACE();
   zombify(current_process, retval);
   schedule();
   for (assert(false);;) { // assert is just a sanity check
@@ -270,16 +258,16 @@ void exit(int retval)
 
 int kill(int pid)
 {
-  COME_FROM_USERSPACE();
 
-  if (pid < 1 || pid > NBPROC) RETURN_TO_USERSPACE(-1);
-  proc *proc = &process_table[pid];
+  if (pid < 1 || pid > NBPROC) return -1;
+  proc *p = &process_table[pid];
 
-  switch (proc->state) {
+  switch (p->state) {
   case DEAD: // invalid pid
-    RETURN_TO_USERSPACE(-1);
+    return -1;
   case ZOMBIE: // can't kill what's already dead
-    break;
+    return -2; // to be compliant with test_4 (kill return value should be
+               // negative)
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
     break;
@@ -287,20 +275,19 @@ int kill(int pid)
     break;
   case READY:
   case SLEEPING:
-    queue_del(proc, node);
-    zombify(proc, 0);
+    queue_del(p, node);
+    zombify(p, 0);
     break;
   case AWAITING_CHILD:
-    zombify(proc, 0);
+    zombify(p, 0);
     break;
   }
 
-  RETURN_TO_USERSPACE(0);
+  return 0;
 }
 
 void sleep(unsigned long ticks)
 {
-  COME_FROM_USERSPACE();
   // setup alarm, go to sleep and yield
   current_process->time.alarm = current_clock() + ticks;
   current_process->state = SLEEPING;
@@ -309,10 +296,9 @@ void sleep(unsigned long ticks)
 
 int waitpid(int pid, int *retvalp)
 {
-  COME_FROM_USERSPACE();
 
   if (pid < 0) { // reap *any* child process
-    if (queue_empty(&current_process->children)) RETURN_TO_USERSPACE(-1);
+    if (queue_empty(&current_process->children)) return -1;
 
     for (;;) {
       printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
@@ -323,7 +309,7 @@ int waitpid(int pid, int *retvalp)
           printf("found %d!\n", child->pid);
           if (retvalp != NULL) *retvalp = child->retval;
           destroy(child);
-          RETURN_TO_USERSPACE(child->pid);
+          return child->pid;
         }
       }
 
@@ -333,18 +319,17 @@ int waitpid(int pid, int *retvalp)
     }
 
   } else { // reap a specific child
-    if (pid < 1 || pid > NBPROC) RETURN_TO_USERSPACE(-1);
-    proc *proc = &process_table[pid];
-    if (proc->state == DEAD || proc->parent != current_process)
-      RETURN_TO_USERSPACE(-1);
+    if (pid < 1 || pid > NBPROC) return -1;
+    proc *p = &process_table[pid];
+    if (p->state == DEAD || p->parent != current_process) return -1;
 
     for (;;) {
       printf("\nProcess %s waiting on pid %d: ", current_process->name, pid);
-      if (proc->state == ZOMBIE) {
-        printf("found %d!\n", proc->pid);
-        if (retvalp != NULL) *retvalp = proc->retval;
-        destroy(proc);
-        RETURN_TO_USERSPACE(pid);
+      if (p->state == ZOMBIE) {
+	printf("found %d!\n", p->pid);
+	if (retvalp != NULL) *retvalp = p->retval;
+	destroy(p);
+	return pid;
       }
 
       printf("will block ...\n");
@@ -363,16 +348,22 @@ void schedule(void)
   // check whether there are sleeping procs to wake up
   const unsigned long now = current_clock();
   proc *       p;
-  queue_for_each(p, &sleeping_procs, proc, node)
-  {
-    // these are sorted by alarm, so we can stop whenever it wasn't reached yet
-    if (p->time.alarm > now) break;
-    // otherwise we wake procs up by moving them to the ready queue
-    queue_del(p, node);
-    p->state = READY;
-    p->time.quantum = QUANTUM;
-    PROC_ENQUEUE_READY(p);
-  }
+  do {
+    p = 0;
+    queue_for_each(p, &sleeping_procs, proc, node)
+    {
+      // these are sorted by alarm,
+      // so we can stop whenever it wasn't reached yet
+      if (p->time.alarm > now) break;
+      // otherwise we wake procs up by moving them to the ready queue
+      queue_del(p, node);
+      p->state = READY;
+      p->time.quantum = QUANTUM;
+      PROC_ENQUEUE_READY(p);
+      // an element was deleted, we need to iterate on the list again
+      break;
+    }
+  } while (p->time.alarm <= now && &p->node != &sleeping_procs);
 
   switch (pass->state) {
   // put it back in the priority queue if it's still active
@@ -434,16 +425,25 @@ static void zombify(proc *p, int retval)
   p->state = ZOMBIE;  // change its state
   // when a parent process dies, its now-orphan children are adopted by init
   proc *child;
-  queue_for_each(child, &(p->children), proc, siblings)
-  {
-    child->parent = INIT_PROC;
-    ADD_CHILD(child, INIT_PROC);
-    if (INIT_PROC->state == AWAITING_CHILD) {
-      INIT_PROC->state = READY;
-      INIT_PROC->time.quantum = QUANTUM;
-      PROC_ENQUEUE_READY(INIT_PROC);
+
+  // empty proc children list
+  do {
+    queue_for_each(child, &p->children, proc, siblings)
+    {
+      child->parent = INIT_PROC;
+      // remove child from its parent's children list
+      REMOVE_CHILD(child);
+      // add it to init's children
+      ADD_CHILD(child, INIT_PROC);
+      if (INIT_PROC->state == AWAITING_CHILD) {
+	INIT_PROC->state = READY;
+	INIT_PROC->time.quantum = QUANTUM;
+	PROC_ENQUEUE_READY(INIT_PROC);
+      }
+      // a child was deleted from proc's children, we need to iterate again
+      break;
     }
-  }
+  } while (!queue_empty(&p->children));
 }
 
 static void destroy(proc *p)
@@ -454,6 +454,9 @@ static void destroy(proc *p)
   mem_free(p->kernel_stack, STACK_SIZE * sizeof(int));
   mem_free(p->name, (strlen(p->name) + 1) * sizeof(char));
 
+  // remove proc from its parent children list
+  if (p->parent != NULL) REMOVE_CHILD(p);
+
   // add it to the free list
   p->state = DEAD;
   PROC_ENQUEUE_FREE(p);
@@ -461,8 +464,10 @@ static void destroy(proc *p)
 
 static void idle(void)
 {
+  int pid;
+
   // idle must start init
-  const int pid = start(init, 256, 1, "init", NULL);
+  pid = start(init, 256, 1, "init", NULL);
   (void)pid;
   assert(pid == 1);
 
@@ -480,6 +485,17 @@ static int p4(void *arg);
 static int init(void *arg)
 {
   (void)arg;
+
+#ifdef KERNEL_TEST
+  printf("---KERNEL TESTS---\n");
+  kernel_run_process_tests();
+
+  // wait for all tests (child) to end
+  while (waitpid(-1, NULL) != -1)
+    ;
+  printf("---END OF KERNEL TESTS---\n");
+#endif
+
   printf("Hello world\n");
   printf("The answer is %d\n", 42);
 
