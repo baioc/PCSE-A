@@ -95,7 +95,7 @@ static void schedule(void);
 // Starts 'init', enables interrupts and loops indefinitely.
 static void idle(void);
 
-// Process tree root that acts as a process reaper daemon.
+// Process tree root that acts as a zombie reaper daemon.
 static int init(void *);
 
 // Sets P as the parent of C and adds C to P's children list.
@@ -441,18 +441,22 @@ static void zombify(struct proc *proc, int retval)
   proc->retval = retval; // store exit code to be read later
   proc->state = ZOMBIE;
 
-  // when a parent process dies, its hierarchy is adopted and killed by init
+  // when a process dies, its children must be adopted by init
   while (!queue_empty(&proc->children)) {
-    // remove child and recursively kill its children as well
     struct proc *child = queue_out(&proc->children, struct proc, siblings);
-    kill(child->pid);
-
-    // then, re-filiate it to init, which will wake up shortly to kill zombies
     filiate(child, INIT_PROC);
-    if (INIT_PROC->state == AWAITING_CHILD) {
+    // when there are zombie children, wake init up to avoid a resource leak
+    if (child->state == ZOMBIE && INIT_PROC->state == AWAITING_CHILD) {
       INIT_PROC->state = READY;
       queue_add(INIT_PROC, &ready_procs, struct proc, node, priority);
     }
+  }
+
+  // let waiting parent know its child is now a ready-to-be-reaped zombie
+  assert(proc->parent != NULL);
+  if (proc->parent->state == AWAITING_CHILD) {
+    proc->parent->state = READY;
+    queue_add(proc->parent, &ready_procs, struct proc, node, priority);
   }
 }
 
