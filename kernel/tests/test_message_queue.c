@@ -1,20 +1,20 @@
 /*
- * kernel_tests.c
+ * test_message_queue.c
  *
- *  Created on: 11/02/2021
- *      Author: Thibault Cantori
+ *  Created on: 21/03/2021
+ *      Author: Maxime MARTIN
  */
 
 /*******************************************************************************
  * Includes
  ******************************************************************************/
 
-#include "kernel_tests.h"
-#include "test_console.h"
-#include "test_clock.h"
-#include "test_message_queue.h"
-#include "userspace_tests.h"
-#include "cpu.h"
+#include "stdint.h"
+#include "stdio.h"
+#include "mem.h"
+
+#include "process.h"
+#include "message-queue.h"
 
 /*******************************************************************************
  * Macros
@@ -28,6 +28,10 @@
  * Internal function declaration
  ******************************************************************************/
 
+static int sender();
+
+static int receiver();
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -35,18 +39,33 @@
 /*******************************************************************************
  * Public function
  ******************************************************************************/
-void kernel_run_general_tests()
+
+/*
+ * Run all tests related to the console.
+ * For now, it only tests prints on screen.
+ */
+void test_message_queue()
 {
-  test_console();
+  int a = start(sender, 1024, 2, "sender", NULL);
+  int b = start(receiver, 1024, 2, "reveiver", NULL);
+  kill(a);
+  kill(b);
+  printf("Message queues are working well\n");
 }
 
-void kernel_run_process_tests()
-{
-  //test_clock();
-  test_message_queue();
-  // Run imported tests from user/tests directory
-  //run_userspace_tests();
-}
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
+
+ static int sender(){
+   assert(pcreate(1) == -1);
+   assert(psend(0, 10) == -1);
+   return 0;
+ }
+
+ static int receiver(){
+   int *message = (int *) mem_alloc(sizeof(int));
+   preceive(1, message);
+   assert(*message == 10);
+   return 0;
+ }

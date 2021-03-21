@@ -1,20 +1,18 @@
 /*
- * kernel_tests.c
+ * test_console.h
  *
- *  Created on: 11/02/2021
+ *  Created on: 10/02/2021
  *      Author: Thibault Cantori
  */
+
+#ifndef _test_message_queue_H_
+#define _test_message_queue_H_
 
 /*******************************************************************************
  * Includes
  ******************************************************************************/
 
-#include "kernel_tests.h"
-#include "test_console.h"
-#include "test_clock.h"
-#include "test_message_queue.h"
-#include "userspace_tests.h"
-#include "cpu.h"
+#include "message-queue.h"
 
 /*******************************************************************************
  * Macros
@@ -25,28 +23,16 @@
  ******************************************************************************/
 
 /*******************************************************************************
- * Internal function declaration
- ******************************************************************************/
-
-/*******************************************************************************
  * Variables
  ******************************************************************************/
 
 /*******************************************************************************
- * Public function
+ * Prototypes
  ******************************************************************************/
-void kernel_run_general_tests()
-{
-  test_console();
-}
 
-void kernel_run_process_tests()
-{
-  //test_clock();
-  test_message_queue();
-  // Run imported tests from user/tests directory
-  //run_userspace_tests();
-}
-/*******************************************************************************
- * Internal function
- ******************************************************************************/
+/*
+ * Run all tests related to the message queues.
+ */
+void test_message_queue();
+
+#endif /* _test_message_queue_H_ */

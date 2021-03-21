@@ -15,6 +15,7 @@
 #include "stdint.h"
 #include "stddef.h"
 #include "debug.h"
+#include "kernel_tests.h"
 #include "cpu.h"
 #include "queue.h"
 #include "mem.h"
@@ -50,6 +51,7 @@
    ZOMBIE,         // terminated but still in use
    SLEEPING,       // process is waiting on its alarm
    AWAITING_CHILD, // process is waiting for one of its children
+   AWAITING_IO,    // process is waiting for and input/output
    READY,          // process waiting for his turn
    ACTIVE,         // process currently running on processor
  } proc_state;
@@ -86,6 +88,11 @@
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
+ // Process disjoint lists.
+ link free_procs;
+ link sleeping_procs;
+ link ready_procs;
 
 /*******************************************************************************
  * Prototypes
@@ -157,5 +164,7 @@ void sleep(unsigned long ticks);
  * the value it points to will be overwritten with the child's exit code.
  */
 int waitpid(int pid, int *retvalp);
+
+proc* get_current_process();
 
 #endif /* _process_H_ */

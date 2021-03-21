@@ -34,22 +34,16 @@
  * Prototypes
  ******************************************************************************/
 
+ void init_indice_gestion_list();
+
  int pcreate(int count);
+
+ int pdelete(int fid);
 
  int psend(int fid, int message);
 
  int preceive(int fid, int *message);
 
- int pdelete(int fid);
-
  int preset(int fid);
-
- void init_indice_gestion_list();
-
- void print_unused_indice_gestion_list();
-
- int valid_fid(int fid);
-
- void test();
 
 #endif /* MESSAGE_QUEUE_H */

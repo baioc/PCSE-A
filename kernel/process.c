@@ -10,6 +10,7 @@
  ******************************************************************************/
 
 #include "process.h"
+#include "message-queue.h"
 
 /*******************************************************************************
  * Types
@@ -89,10 +90,6 @@ static proc process_table[NBPROC + 1];
 // Current process running on processor.
 proc *current_process = NULL;
 
-// Process disjoint lists.
-link free_procs;
-link sleeping_procs;
-link ready_procs;
 /*******************************************************************************
  * Public function
  ******************************************************************************/
@@ -114,6 +111,9 @@ void process_init(void) // only called from kernel space
     p->state = DEAD;
     PROC_ENQUEUE_FREE(p);
   }
+
+  //initialize the gestion of message queues
+  init_indice_gestion_list();
 
   // idle is the first process to run
   current_process = IDLE_PROC;
@@ -221,6 +221,7 @@ int chprio(int pid, int newprio)
     break;
   // new priority will take effect when it wakes up
   case AWAITING_CHILD:
+  case AWAITING_IO:
   case SLEEPING:
   case BLOCKED:
   case ZOMBIE:
@@ -275,6 +276,7 @@ int kill(int pid)
     break;
   case READY:
   case SLEEPING:
+  case AWAITING_IO:
     queue_del(p, node);
     zombify(p, 0);
     break;
@@ -397,6 +399,7 @@ void schedule(void)
 
   // nothing to do
   case AWAITING_CHILD:
+  case AWAITING_IO:
     break;
 
   // unreachable
@@ -413,6 +416,10 @@ void schedule(void)
 
   // hand the cpu over to the newly scheduled process
   ctx_sw(&pass->ctx, &take->ctx);
+}
+
+proc* get_current_process(){
+  return current_process;
 }
 
 /*******************************************************************************
