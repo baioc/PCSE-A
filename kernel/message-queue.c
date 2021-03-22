@@ -91,6 +91,7 @@ static link indice_used_gestion;
    }
  }
 
+// creats a new message-queue, with a lenght of size 'count'
  int pcreate(int count){
    // if the lenght "count" is not valid or if there is not space to create a
    // new messsage queue, return -1
@@ -119,6 +120,7 @@ static link indice_used_gestion;
    return fid;
  }
 
+// sends the message 'message' in the message queue identified by fid
  int psend(int fid, int message){
    // if the given fid is incorrect, return -1
    if(valid_fid(fid) != 0){
@@ -158,6 +160,7 @@ static link indice_used_gestion;
    return -1;
  }
 
+// recieves a message from the queue identified by fid
  int preceive(int fid, int *message){
    // if the given fid is incorrect, return -1
    if(valid_fid(fid) != 0){
@@ -198,27 +201,14 @@ static link indice_used_gestion;
    return -1;
  }
 
+// deletes the message queue identified by fid
  int pdelete(int fid){
    // if the given fid is incorrect, return -1
    if(valid_fid(fid) != 0){
      return -1;
    }
 
-   // first, all the processes wainting to send or to receive a message are
-   // freed. They have a negative return value from psend or preceive
-   proc* blocked_send;
-   while(queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
-     blocked_send = queue_out(&queue_tab[fid]->waiting_to_send, proc, node);
-     blocked_send->state = READY;
-     queue_add(blocked_send, &ready_procs, proc, node, priority);
-   }
-
-   proc* blocked_receive;
-   while(queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
-     blocked_receive = queue_out(&queue_tab[fid]->waiting_to_receive, proc, node);
-     blocked_receive->state = READY;
-     queue_add(blocked_receive, &ready_procs, proc, node, priority);
-   }
+   remove_waiting_processes(fid);
 
    // we delete the message queue corresponding to fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
@@ -237,19 +227,44 @@ static link indice_used_gestion;
    return -1;
  }
 
+ // resets the message queue identified by fid
  int preset(int fid){
    // if the given fid is incorrect, return -1
    if(valid_fid(fid) != 0){
      return -1;
    }
 
-   // we reset all the atributes of the message queue fid
+   remove_waiting_processes(fid);
+
+   // we reset all the attributes of the message queue fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght * sizeof(int));
    queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*queue_tab[fid]->lenght);
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
    queue_tab[fid]->id_received = -1;
    return 0;
+ }
+
+ int pcount(int fid, int *count){
+   // if the given fid is incorrect, return -1
+   if(valid_fid(fid) != 0){
+     return -1;
+   }
+   if(pcount != 0 && queue_empty(queue_tab[fid]->waiting_to_receive) == 0){
+     struct indice_queue_tab* indice_iterator;
+     *pcount = 0;
+     queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_receive, proc, node){
+       *pcount ++;
+     }
+     *pcount = - *pcount;
+  } else if(pcount != 0 && queue_empty(queue_tab[fid]->waiting_to_send) == 0){
+    struct indice_queue_tab* indice_iterator;
+    *pcount = queue_tab[fid]->nb_send;
+    queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_send, proc, node){
+      *pcount ++;
+    }
+  }
+  return 0;
  }
 
 /*******************************************************************************
@@ -265,4 +280,22 @@ int valid_fid(int fid){
     }
   }
   return -1;
+}
+
+void remove_waiting_processes(int fid){
+  // All the processes wainting to send or to receive a message are
+  // freed. They have a negative return value from psend or preceive
+  proc* blocked_send;
+  while(queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
+    blocked_send = queue_out(&queue_tab[fid]->waiting_to_send, proc, node);
+    blocked_send->state = READY;
+    queue_add(blocked_send, &ready_procs, proc, node, priority);
+  }
+
+  proc* blocked_receive;
+  while(queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
+    blocked_receive = queue_out(&queue_tab[fid]->waiting_to_receive, proc, node);
+    blocked_receive->state = READY;
+    queue_add(blocked_receive, &ready_procs, proc, node, priority);
+  }
 }

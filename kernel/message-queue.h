@@ -46,4 +46,6 @@
 
  int preset(int fid);
 
+ int pcount(int fid, int *count);
+
 #endif /* MESSAGE_QUEUE_H */
