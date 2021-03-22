@@ -61,9 +61,9 @@
  * Internal function declaration
  ******************************************************************************/
 
-void init_indice_gestion_list();
-
 int valid_fid(int fid);
+
+void remove_waiting_processes(int fid);
 
 /*******************************************************************************
  * Variables
@@ -250,19 +250,20 @@ static link indice_used_gestion;
    if(valid_fid(fid) != 0){
      return -1;
    }
-   if(pcount != 0 && queue_empty(queue_tab[fid]->waiting_to_receive) == 0){
-     struct indice_queue_tab* indice_iterator;
-     *pcount = 0;
+   int value = 0;
+   if(queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
+     proc* indice_iterator;
      queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_receive, proc, node){
-       *pcount ++;
+       value ++;
      }
-     *pcount = - *pcount;
-  } else if(pcount != 0 && queue_empty(queue_tab[fid]->waiting_to_send) == 0){
-    struct indice_queue_tab* indice_iterator;
-    *pcount = queue_tab[fid]->nb_send;
+     *count = - value;
+  } else if(queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
+    proc* indice_iterator;
+    value = queue_tab[fid]->nb_send;
     queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_send, proc, node){
-      *pcount ++;
+      value ++;
     }
+    *count = value;
   }
   return 0;
  }
