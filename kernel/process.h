@@ -23,6 +23,7 @@
 #include "clock.h"
 #include "console.h"
 #include "sem.h"
+#include "kernel_tests.h"
 
 /*******************************************************************************
  * Macros

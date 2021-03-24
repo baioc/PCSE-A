@@ -387,7 +387,6 @@ void schedule(void)
   // we'll only find a blocked proc here when it has just been blocked
   case BLOCKED:
     printf("\n* %s(%d) just blocked *\n", pass->name, pass->pid);
-    queue_del(pass, node); // delete it from ready proc's list
     break;
 
   // when a process goes to sleep, we put it in a separate queue
