@@ -24,8 +24,15 @@ struct uapps {
 
 /**
  * A table of descriptor that reference all userspace binaries.
+ * NOTE: this is a "null-terminated" array, see generate-symbols-table.sh
  */
 extern const struct uapps symbols_table[];
+
+/// Initializes the user application subsystem for subsequent app queries.
+void uapps_init(void);
+
+/// Finds a user application by its name. Returns NULL when not found.
+struct uapps *uapp_get(const char *name);
 
 #endif
 
