@@ -271,13 +271,12 @@ int kill(int pid)
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
     break;
-  case BLOCKED: // Not the good solution
-    break;
   case READY:
   case SLEEPING:
     queue_del(p, node);
     zombify(p, 0);
     break;
+  case BLOCKED:
   case AWAITING_CHILD:
     zombify(p, 0);
     break;

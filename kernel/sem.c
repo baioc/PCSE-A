@@ -2,12 +2,8 @@
  * sem.c
  *
  *  Created on: 03/03/2021
- *      Authors: Antoine Briançon, Thibault Cantori
+ *      Authors: Antoine Briançon
  */
-
-/*  A TERMINER
-  Tests
-*/
 
 /*******************************************************************************
  * Includes
@@ -25,19 +21,26 @@
  /*******************************************************************************
   * Internal function declaration
   ******************************************************************************/
+  /*
+  Check if process in the list_blocked of sem have BLOCKED state
+  Otherwise the function dequeue the process and increments the counter
+  Return the total number of increments
+  */
+  static int check_sem(int sem);
  /*******************************************************************************
   * Variables
   ******************************************************************************/
   int nbr_sem = 0;
 
   semaph list_sem[MAXNBR_SEM];
+  // from process.c
   extern link ready_procs;
   extern proc *current_process;
  /*******************************************************************************
   * Public function
   ******************************************************************************/
   /*
-  Create a semaphore with a counter of count
+  Create a semaphore with a counter value of count
   */
   int screate(short int count){
     if(nbr_sem == MAXNBR_SEM || count < 0) return -1;
@@ -55,9 +58,11 @@
   }
 
   /*
-  Delete the semaphore list_sem[sem]
+  Delete the semaphore list_sem[sem] and free all the process in it list
   */
   int sdelete(int sem){
+    int check = check_sem(sem);
+    if(check < 0) return check;
     if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
     proc *p;
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
@@ -75,6 +80,8 @@
   Do the V operation on semaphore list_sem[sem]
   */
   int signal(int sem){
+    int check = check_sem(sem);
+    if(check < 0) return check;
     if(sem < 0 || sem >= MAXNBR_SEM || list_sem[sem].sid != sem) return -1;
     if((short int)(list_sem[sem].count + 1) < list_sem[sem].count) return -2;
     list_sem[sem].count += 1;
@@ -92,6 +99,8 @@
   Do the V operation count time on semaphore list_sem[sem]
   */
   int signaln(int sem, short int count){
+    int check = check_sem(sem);
+    if(check < 0) return check;
     if(sem < 0 || sem >= MAXNBR_SEM || list_sem[sem].sid != sem) return -1;
     if((short int)(list_sem[sem].count + count) < list_sem[sem].count)
                                                                       return -2;
@@ -113,6 +122,8 @@
   Reset the semaphore list_sem[sem]
   */
   int sreset(int sem,short int count){
+    int check = check_sem(sem);
+    if(check < 0) return check;
     if(sem >= MAXNBR_SEM || sem < 0 || count < 0 || list_sem[sem].sid != sem)
                                                                       return -1;
     proc *p;
@@ -161,3 +172,24 @@
  /*******************************************************************************
   * Internal function
   ******************************************************************************/
+  /*
+  Check if process in the list_blocked of sem have BLOCKED state
+  Otherwise the function dequeue the process and increments the counter
+  Return the total number of increments
+  */
+  static int check_sem(int sem){
+    if(sem >= MAXNBR_SEM || sem < 0) return -1;
+    if(list_sem[sem].sid != sem) return -3;
+    int i = 0;
+    proc *p;
+    queue_for_each(p, &(list_sem[sem].list_blocked), proc, blocked){
+      if(p->state != BLOCKED){
+        if((short int)(list_sem[sem].count + 1) < list_sem[sem].count)
+                                                                    return -2;
+        queue_del(p, blocked);
+        list_sem[sem].count += 1;
+        i++;
+      }
+    }
+    return i;
+  }
