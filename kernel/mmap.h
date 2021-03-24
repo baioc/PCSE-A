@@ -20,6 +20,8 @@
 
 #define PAGE_SIZE 0x1000 /* 4 KiB */
 
+#define PAGE_TABLE_LENGTH 1024
+
 /// Page flags.
 #define PAGE_PRESENT 0x01
 
@@ -36,10 +38,17 @@
  ******************************************************************************/
 
 /**
- * Creates a virtual-physical address mapping in the PGDIR page directory.
+ * Creates a virtual-physical address mapping in the PGD page directory.
  * Addresses VIRT and REAL must be page-aligned and the given FLAGS will apply.
+ * NOTE: In case a mapping of VIRST already exists, it will be overwritten.
+ *
+ * If the page table for the requested virtual address is not marked as present
+ * in the given page directory, this routine will return its index (a strictly
+ * positive value) and have no further effect. When this happens, you must first
+ * allocate a frame for the new page table and set it up in the page directory.
+ * Otherwise, returns 0.
  */
-void page_map(uint32_t *pgdir, const void *virt, const void *real, int flags);
+int page_map(uint32_t *pgdir, const void *virt, const void *real, int flags);
 
 /**
  * Initializes the physical page allocator system.

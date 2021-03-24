@@ -18,13 +18,13 @@
  * Macros
  ******************************************************************************/
 
-#define TOTAL_MEMORY  0x10000000 /* 256 MiB */
-#define TOTAL_PAGES   (TOTAL_MEMORY / PAGE_SIZE)
+#define TOTAL_MEMORY 0x10000000 /* 256 MiB */
+#define TOTAL_PAGES  (TOTAL_MEMORY / PAGE_SIZE)
 
 #define KERNEL_MEMORY 0x04000000 /* 64 MiB */
 #define KERNEL_PAGES  (KERNEL_MEMORY / PAGE_SIZE)
 
-#define POOL_SIZE     (TOTAL_PAGES - KERNEL_PAGES) /* page units */
+#define POOL_SIZE (TOTAL_PAGES - KERNEL_PAGES) /* page units */
 
 /*******************************************************************************
  * Types
@@ -51,30 +51,26 @@ static struct page *g_free_list;
  ******************************************************************************/
 
 // Reference: https://wiki.osdev.org/Paging
-void page_map(uint32_t *pgdir, const void *virt, const void *real, int flags)
+int page_map(uint32_t *pgdir, const void *virt, const void *real, int flags)
 {
   // check for page alignment
-  assert(((uint32_t)virt & (PAGE_SIZE-1)) == 0);
-  assert(((uint32_t)real & (PAGE_SIZE-1)) == 0);
+  assert(((uint32_t)virt & (PAGE_SIZE - 1)) == 0);
+  assert(((uint32_t)real & (PAGE_SIZE - 1)) == 0);
 
   // get the page dir entry and check if the associated page table is present
   const unsigned pd_index = ((uint32_t)virt >> 22) & 0x3FF;
   const uint32_t pd_entry = pgdir[pd_index];
-  if (!(pd_entry & PAGE_PRESENT)) {
-    // TODO: allocate missing page table
-  }
+  if (!(pd_entry & PAGE_PRESENT)) return pd_index;
 
-  // get the page table entry and see it there's already a mapping present
-  uint32_t * const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
-  const unsigned pt_index = ((uint32_t)virt >> 12) & 0x3FF;
-  const uint32_t pt_entry = pgtab[pt_index];
-  if (pt_entry & PAGE_PRESENT) {
-    // TODO: resolve page mapping conflict
-  }
+  // get the page table entry
+  uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
+  const unsigned  pt_index = ((uint32_t)virt >> 12) & 0x3FF;
 
   // setup address translation, applying flags and marking target as present
   pgtab[pt_index] = (uint32_t)real | (flags & 0xFFF) | PAGE_PRESENT;
-  // TODO: do we need to flush some TLB entry?
+  // NOTE: no need to flush TLB, it will be done automatically by the hardware
+
+  return 0;
 }
 
 void frame_init(void)
