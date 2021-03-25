@@ -13,6 +13,7 @@
 
 #include "stddef.h"
 #include "debug.h"
+#include "string.h"
 
 /*******************************************************************************
  * Macros
@@ -30,10 +31,6 @@
  * Types
  ******************************************************************************/
 
-struct page {
-  struct page *next;
-};
-
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
@@ -42,35 +39,56 @@ struct page {
  * Variables
  ******************************************************************************/
 
+extern char mem_end[];      // physical memory end
+extern char mem_heap_end[]; // kernel memory end
+
 // Free-list -based pool allocator for physical memory pages.
-static struct page  g_memory[POOL_SIZE];
-static struct page *g_free_list;
+static struct page  g_user_memory[POOL_SIZE];
+static struct page *g_free_list = NULL;
 
 /*******************************************************************************
  * Public function
  ******************************************************************************/
 
 // Reference: https://wiki.osdev.org/Paging
-int page_map(uint32_t *pgdir, const void *virt, const void *real, int flags)
+int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags)
 {
   // check for page alignment
-  assert(((uint32_t)virt & (PAGE_SIZE - 1)) == 0);
-  assert(((uint32_t)real & (PAGE_SIZE - 1)) == 0);
+  assert(virt % PAGE_SIZE == 0);
+  assert(real % PAGE_SIZE == 0);
 
   // get the page dir entry and check if the associated page table is present
-  const unsigned pd_index = ((uint32_t)virt >> 22) & 0x3FF;
+  const unsigned pd_index = (virt >> 22) & 0x3FF;
   const uint32_t pd_entry = pgdir[pd_index];
   if (!(pd_entry & PAGE_PRESENT)) return pd_index;
 
   // get the page table entry
   uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
-  const unsigned  pt_index = ((uint32_t)virt >> 12) & 0x3FF;
+  const unsigned  pt_index = (virt >> 12) & 0x3FF;
 
   // setup address translation, applying flags and marking target as present
-  pgtab[pt_index] = (uint32_t)real | (flags & 0xFFF) | PAGE_PRESENT;
+  pgtab[pt_index] = real | (flags & 0xFFF) | PAGE_PRESENT;
   // NOTE: no need to flush TLB, it will be done automatically by the hardware
 
-  return 0;
+  return -1; // === ok
+}
+
+void *translate(const uint32_t *pgdir, uint32_t virt)
+{
+  // get the page dir entry and check if the associated page table is present
+  const unsigned pd_index = (virt >> 22) & 0x3FF;
+  const uint32_t pd_entry = pgdir[pd_index];
+  if (!(pd_entry & PAGE_PRESENT)) return NULL;
+
+  // get the page table entry
+  uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
+  const unsigned  pt_index = (virt >> 12) & 0x3FF;
+  const uint32_t  pt_entry = pgtab[pt_index];
+  if (!(pt_entry & PAGE_PRESENT)) return NULL;
+
+  // get the actual physical page address and add the in-page offset in
+  const uint32_t page = (uint32_t)(pt_entry & 0xFFFFF000);
+  return (void *)(page | (virt & 0xFFF));
 }
 
 void frame_init(void)
@@ -78,28 +96,33 @@ void frame_init(void)
   // add all pages in the pool (w/ kernel frames excluded) to the free list
   g_free_list = NULL;
   for (unsigned i = 0; i < POOL_SIZE; ++i) {
-    g_memory[i].next = g_free_list;
-    g_free_list = &g_memory[i];
+    g_user_memory[i].next = g_free_list;
+    g_free_list = &g_user_memory[i];
   }
+
+  // make sure all pages start zeroed-out
+  assert(TOTAL_MEMORY == (uint32_t)mem_end);
+  assert(KERNEL_MEMORY == (uint32_t)mem_heap_end);
+  memset(mem_heap_end, 0, mem_end - mem_heap_end);
 }
 
-int frame_alloc(void)
+struct page *frame_alloc(void)
 {
   // pop free list head and use its address to compute index and frame number
-  if (g_free_list == NULL) return -1;
-  const unsigned i = g_free_list - g_memory;
+  if (g_free_list == NULL) return NULL;
+  struct page *p = g_free_list;
   g_free_list = g_free_list->next;
-  return KERNEL_PAGES + i;
+  p->frame = KERNEL_PAGES + (p - g_user_memory);
+  return p;
 }
 
-void frame_free(int frame)
+void frame_free(struct page *p)
 {
-  // get pool index from frame number
-  const int i = frame - KERNEL_PAGES;
-  assert(i >= 0 && i < POOL_SIZE);
-  // add page to free list
-  g_memory[i].next = g_free_list;
-  g_free_list = &g_memory[i];
+  // zero out physical memory page and return it to the free list
+  assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
+  memset((void *)(p->frame * PAGE_SIZE), 0, PAGE_SIZE);
+  p->next = g_free_list;
+  g_free_list = p;
 }
 
 /*******************************************************************************
