@@ -151,6 +151,10 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   new_proc->pid = new_proc - process_table; // calculate index from pointer
   new_proc->priority = prio;
 
+  new_proc->m_queue_fid = -1;
+  new_proc->m_queue_rd_send = 0;
+  new_proc->m_queue_rd_receive = 0;
+
   // copy name
   new_proc->name = mem_alloc((strlen(name) + 1) * sizeof(char));
   if (new_proc->name == NULL) {
@@ -219,9 +223,11 @@ int chprio(int pid, int newprio)
     PROC_ENQUEUE_READY(p); // place it again with the updated priority
     if (p->priority > current_process->priority) schedule();
     break;
+  case AWAITING_IO:
+    changing_proc_prio(p);
+    break;
   // new priority will take effect when it wakes up
   case AWAITING_CHILD:
-  case AWAITING_IO:
   case SLEEPING:
   case BLOCKED:
   case ZOMBIE:

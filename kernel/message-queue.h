@@ -17,18 +17,40 @@
  #include "cpu.h"
  #include "clock.h"
  #include "console.h"
+ #include "process.h"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
+ // Total number of message queues
+ #define NBQUEUE 10
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
+ struct indice_queue_tab {
+   int indice;
+   int priority;
+   link node_indice;
+ };
+
+ struct message_queue {
+   int *m_queue;
+   int lenght;
+   int id_send;
+   int nb_send;
+   int id_received;
+   link waiting_to_send;
+   link waiting_to_receive;
+ };
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
+ struct message_queue* queue_tab[NBQUEUE];
 
 /*******************************************************************************
  * Prototypes
@@ -47,5 +69,7 @@
  int preset(int fid);
 
  int pcount(int fid, int *count);
+
+ void changing_proc_prio(proc* p);
 
 #endif /* MESSAGE_QUEUE_H */

@@ -83,6 +83,9 @@
    link         siblings;
    link         blocked; // if blocked by a semaphore
    int          retval;
+   int          m_queue_fid; // fid in which the process if sending/receving messages
+   int          m_queue_rd_send; // if blocked on a reseted or deleted message queue while sending
+   int          m_queue_rd_receive; // if blocked on a reseted or deleted message queue while receiving
  };
  typedef struct _proc proc;
 /*******************************************************************************

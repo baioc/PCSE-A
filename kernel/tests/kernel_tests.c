@@ -12,7 +12,6 @@
 #include "kernel_tests.h"
 #include "test_console.h"
 #include "test_clock.h"
-#include "test_message_queue.h"
 #include "userspace_tests.h"
 #include "cpu.h"
 
@@ -42,10 +41,9 @@ void kernel_run_general_tests()
 
 void kernel_run_process_tests()
 {
-  //test_clock();
-  test_message_queue();
+  test_clock();
   // Run imported tests from user/tests directory
-  //run_userspace_tests();
+  run_userspace_tests();
 }
 /*******************************************************************************
  * Internal function

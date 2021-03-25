@@ -11,15 +11,11 @@
 
 #include "mem.h"
 #include "stddef.h"
-#include "process.h"
 #include "message-queue.h"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
-
-// Total number of message queues
-#define NBQUEUE 10
 
 // Adds indice pointed to by P into the unused indices queue
 #define MQUEUE_UNUSED_ID_ADD(p) queue_add((p), &indice_unused_gestion, struct indice_queue_tab, node_indice, priority)
@@ -41,39 +37,21 @@
 
  typedef struct _proc proc;
 
- struct indice_queue_tab {
-   int indice;
-   int priority;
-   link node_indice;
- };
-
- struct message_queue {
-   int *m_queue;
-   int lenght;
-   int id_send;
-   int nb_send;
-   int id_received;
-   link waiting_to_send;
-   link waiting_to_receive;
- };
-
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
 int valid_fid(int fid);
 
-void remove_waiting_processes(int fid);
+void remove_waiting_processes(int fid, int value);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
-struct message_queue* queue_tab[NBQUEUE];
+ static link indice_unused_gestion;
 
-static link indice_unused_gestion;
-
-static link indice_used_gestion;
+ static link indice_used_gestion;
 
 /*******************************************************************************
  * Public function
@@ -105,6 +83,10 @@ static link indice_used_gestion;
    // we initialize the new message queue
    queue_tab[fid] = mem_alloc(sizeof(struct message_queue));
    queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*count);
+   /*if(errno == ENOMEM){
+     mem_free(queue_tab[fid], sizeof(struct message_queue));
+     return -1;
+   }*/
    queue_tab[fid]->lenght = count;
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
@@ -127,6 +109,8 @@ static link indice_used_gestion;
      return -1;
    }
 
+   get_current_process()->m_queue_fid = fid;
+
    // if the queue is empty, and there are processes waiting to receive a
    // message, we serve the highest priority process
    if(queue_tab[fid]->nb_send == 0 && queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
@@ -147,7 +131,15 @@ static link indice_used_gestion;
      active_process->state = AWAITING_IO;
      queue_add(active_process, &queue_tab[fid]->waiting_to_send, proc, node, priority);
      schedule();
-     return 0;
+     if(get_current_process()->m_queue_rd_send == 1){
+       get_current_process()->m_queue_rd_send = 0;
+       return -1;
+     } else {
+       queue_tab[fid]->nb_send ++;
+       queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
+       queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+       return 0;
+     }
    }
    // if the queue is not full, we save the message and return 0
    else {
@@ -156,7 +148,6 @@ static link indice_used_gestion;
      queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
      return 0;
    }
-
    return -1;
  }
 
@@ -167,12 +158,14 @@ static link indice_used_gestion;
      return -1;
    }
 
+   get_current_process()->m_queue_fid = fid;
+
    // if the queue is full and there are processes waiting to send a message,
    // we serve the highest priority process
    if(queue_tab[fid]->nb_send == queue_tab[fid]->lenght && queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
      queue_tab[fid]->nb_send --;
      queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
-     *message = queue_tab[fid]->id_received;
+     *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
      proc* p_to_send = queue_out(&queue_tab[fid]->waiting_to_send, proc, node);
      p_to_send->state = READY;
      queue_add(p_to_send, &ready_procs, proc, node, priority);
@@ -187,14 +180,22 @@ static link indice_used_gestion;
      active_process->state = AWAITING_IO;
      queue_add(active_process, &queue_tab[fid]->waiting_to_receive, proc, node, priority);
      schedule();
-     return 0;
+     if(get_current_process()->m_queue_rd_receive == 1){
+       get_current_process()->m_queue_rd_receive = 0;
+       return -1;
+     } else {
+       queue_tab[fid]->nb_send --;
+       queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
+       *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
+       return 0;
+     }
    }
 
    // if the queue is not empty, we get the message and return 0
    if(queue_tab[fid]->nb_send != 0){
      queue_tab[fid]->nb_send --;
      queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
-     *message = queue_tab[fid]->id_received;
+     *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
      return 0;
    }
 
@@ -208,7 +209,7 @@ static link indice_used_gestion;
      return -1;
    }
 
-   remove_waiting_processes(fid);
+   remove_waiting_processes(fid, 0);
 
    // we delete the message queue corresponding to fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
@@ -234,7 +235,7 @@ static link indice_used_gestion;
      return -1;
    }
 
-   remove_waiting_processes(fid);
+   remove_waiting_processes(fid, 1);
 
    // we reset all the attributes of the message queue fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght * sizeof(int));
@@ -242,6 +243,7 @@ static link indice_used_gestion;
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
    queue_tab[fid]->id_received = -1;
+
    return 0;
  }
 
@@ -257,6 +259,7 @@ static link indice_used_gestion;
        value ++;
      }
      *count = - value;
+     return 0;
   } else if(queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
     proc* indice_iterator;
     value = queue_tab[fid]->nb_send;
@@ -264,9 +267,21 @@ static link indice_used_gestion;
       value ++;
     }
     *count = value;
+    return 0;
   }
+  *count = queue_tab[fid]->nb_send;
   return 0;
  }
+
+  void changing_proc_prio(proc* p){
+    if(queue_empty(&queue_tab[p->m_queue_fid]->waiting_to_send) != 0){
+      queue_del(p, node);
+      queue_add((p), &queue_tab[p->m_queue_fid]->waiting_to_receive, proc, node, priority);
+    } else {
+      queue_del(p, node);
+      queue_add((p), &queue_tab[p->m_queue_fid]->waiting_to_send, proc, node, priority);
+    }
+  }
 
 /*******************************************************************************
  * Internal function
@@ -283,13 +298,15 @@ int valid_fid(int fid){
   return -1;
 }
 
-void remove_waiting_processes(int fid){
+void remove_waiting_processes(int fid, int value){
   // All the processes wainting to send or to receive a message are
   // freed. They have a negative return value from psend or preceive
   proc* blocked_send;
   while(queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
     blocked_send = queue_out(&queue_tab[fid]->waiting_to_send, proc, node);
     blocked_send->state = READY;
+    blocked_send->m_queue_rd_send = value;
+    blocked_send->m_queue_fid = -1;
     queue_add(blocked_send, &ready_procs, proc, node, priority);
   }
 
@@ -297,6 +314,8 @@ void remove_waiting_processes(int fid){
   while(queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
     blocked_receive = queue_out(&queue_tab[fid]->waiting_to_receive, proc, node);
     blocked_receive->state = READY;
+    blocked_receive->m_queue_rd_receive = value;
+    blocked_receive->m_queue_fid = -1;
     queue_add(blocked_receive, &ready_procs, proc, node, priority);
   }
 }
