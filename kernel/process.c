@@ -242,7 +242,7 @@ int getprio(int pid)
 {
   if (pid < 1 || pid > NBPROC) return -1;
   proc *p = &process_table[pid];
-  if (p->state == DEAD) return -1;
+  if (p->state == DEAD || p->state == ZOMBIE) return -1;
   const int prio = p->priority;
   return prio;
 }
@@ -425,6 +425,10 @@ void schedule(void)
 
 static void zombify(proc *p, int retval)
 {
+  if(p->state == BLOCKED){
+    queue_del(p, blocked); // remove process from blocked list
+    list_sem[p->sid].count += 1; // increments counter of semaphore
+  }
   p->retval = retval; // store exit code
   p->state = ZOMBIE;  // change its state
   // when a parent process dies, its now-orphan children are adopted by init
@@ -440,9 +444,9 @@ static void zombify(proc *p, int retval)
       // add it to init's children
       ADD_CHILD(child, INIT_PROC);
       if (INIT_PROC->state == AWAITING_CHILD) {
-	INIT_PROC->state = READY;
-	INIT_PROC->time.quantum = QUANTUM;
-	PROC_ENQUEUE_READY(INIT_PROC);
+      	INIT_PROC->state = READY;
+      	INIT_PROC->time.quantum = QUANTUM;
+      	PROC_ENQUEUE_READY(INIT_PROC);
       }
       // a child was deleted from proc's children, we need to iterate again
       break;

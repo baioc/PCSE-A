@@ -66,6 +66,8 @@ static int test_14_sem(void *arg);
 static int proc14_1(void *arg);
 static int proc14_2(void *arg);
 
+static int test_15_sem(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -85,6 +87,7 @@ void run_userspace_tests()
   start(test_8, 0, 128, "test_8", 0);
   start(test_12_sem, 0, 128, "test_12_sem", 0);
   start(test_14_sem, 0, 128, "test_14_sem", 0);
+  start(test_15_sem, 0, 128, "test_15_sem", 0);
 }
 
 /*******************************************************************************
@@ -638,7 +641,7 @@ static unsigned long long div64(unsigned long long x, unsigned long long div,
          assert(signaln(sem, 2) == 0);
          printf(" 10");
          assert(waitpid(pid1, 0) == pid1);
-         assert(scount(sem) == 0xffff); // Revoir les entiers signés (bits de poids faible etc.)
+         assert(scount(sem) == 0xffff);
          assert(kill(pid2) == 0);
          assert(getprio(pid2) < 0);
          assert(chprio(pid2, 129) < 0);
@@ -678,7 +681,45 @@ static unsigned long long div64(unsigned long long x, unsigned long long div,
 /*-----------------*
  *      Test 15
  *-----------------*/
-// TODO: Add test_15 when semaphore/message queue are available
+ static int test_15_sem(void *arg)
+ {
+         int sem, i;
+
+         (void)arg;
+
+         assert(screate(-2) == -1);
+         assert((sem = screate(2)) >= 0);
+         assert(signaln(sem, -4) < 0);
+         assert(sreset(sem, -3) == -1);
+         assert(scount(sem) == 2);
+         assert(signaln(sem, 32760) == 0);
+         assert(signaln(sem, 6) == -2);
+         assert(scount(sem) == 32762);
+         assert(wait(sem) == 0); // Bloque ici
+         assert(scount(sem) == 32761);
+         assert(signaln(sem, 30000) == -2);
+         assert(scount(sem) == 32761);
+         assert(wait(sem) == 0);
+         assert(scount(sem) == 32760);
+         assert(signaln(sem, -2) < 0);
+         assert(scount(sem) == 32760);
+         assert(wait(sem) == 0);
+         assert(scount(sem) == 32759);
+         assert(signaln(sem, 8) == 0);
+         assert(scount(sem) == 32767);
+         assert(signaln(sem, 1) == -2);
+         assert(scount(sem) == 32767);
+         assert(signal(sem) == -2);
+         assert(scount(sem) == 32767);
+         for (i=0; i<32767; i++) {
+                 assert(wait(sem) == 0);
+         }
+         assert(try_wait(sem) == -3);
+         assert(scount(sem) == 0);
+         assert(sdelete(sem) == 0);
+         printf("ok.\n");
+         return 0;
+ }
 
 /*-----------------*
  *      Test 16
