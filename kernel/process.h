@@ -81,6 +81,7 @@
    link         children;
    link         siblings;
    link         blocked; // if blocked by a semaphore
+   int          sid; // id of the semaphore blocking it (if BLOCKED)
    int          retval;
  };
  typedef struct _proc proc;

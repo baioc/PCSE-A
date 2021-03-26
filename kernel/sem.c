@@ -155,9 +155,10 @@
     if((short int)(list_sem[sem].count - 1) > list_sem[sem].count) return -2;
     if(list_sem[sem].sid != sem) return -3;
     list_sem[sem].count -= 1;
+    current_process->state = BLOCKED;
+    current_process->sid = sem;
     queue_add(current_process, &(list_sem[sem].list_blocked), proc,
                                                             blocked, priority);
-    current_process->state = BLOCKED;
     schedule();
     return 0;
   }
@@ -167,7 +168,7 @@
   */
   int scount(int sem){
     if(sem >= MAXNBR_SEM || sem < 0) return -1;
-    return (int)list_sem[sem].count;
+    return (int)(list_sem[sem].count);
   }
  /*******************************************************************************
   * Internal function

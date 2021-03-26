@@ -93,6 +93,8 @@ proc *current_process = NULL;
 link free_procs;
 link sleeping_procs;
 link ready_procs;
+
+extern semaph list_sem[MAXNBR_SEM];
 /*******************************************************************************
  * Public function
  ******************************************************************************/
@@ -220,9 +222,13 @@ int chprio(int pid, int newprio)
     if (p->priority > current_process->priority) schedule();
     break;
   // new priority will take effect when it wakes up
+  case BLOCKED:
+    queue_del(p, blocked);    // remove process from the blocked list
+    queue_add(p, &(list_sem[p->sid].list_blocked), proc, blocked, priority);
+    // place it again with the updated priority
+    break;
   case AWAITING_CHILD:
   case SLEEPING:
-  case BLOCKED:
   case ZOMBIE:
     break;
   case DEAD: // unreachable

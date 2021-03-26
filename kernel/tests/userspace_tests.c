@@ -62,6 +62,10 @@ static int proc12_1(void *arg);
 static int proc12_2(void * arg);
 static int proc12_3(void *arg);
 
+static int test_14_sem(void *arg);
+static int proc14_1(void *arg);
+static int proc14_2(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -80,6 +84,7 @@ void run_userspace_tests()
   start(test_5, 0, 128, "test_5", 0);
   start(test_8, 0, 128, "test_8", 0);
   start(test_12_sem, 0, 128, "test_12_sem", 0);
+  start(test_14_sem, 0, 128, "test_14_sem", 0);
 }
 
 /*******************************************************************************
@@ -609,7 +614,66 @@ static unsigned long long div64(unsigned long long x, unsigned long long div,
 /*-----------------*
  *      Test 14
  *-----------------*/
-// TODO: Add test_14 when semaphore/message queue are available
+ static int test_14_sem(void *arg)
+ {
+         int sem;
+         int pid1, pid2;
+
+         (void)arg;
+
+         assert(getprio(getpid()) == 128);
+         assert((sem = screate(0)) >= 0);
+         pid1 = start(proc14_1, 4000, 129, "proc14_1", (void *)sem);
+         assert(pid1 > 0);
+         printf(" 2");
+         pid2 = start(proc14_2, 4000, 130, "proc14_2", (void *)sem);
+         assert(pid2 > 0);
+         printf(" 4");
+         assert(chprio(pid1, 131) == 129);
+         assert(signal(sem) == 0);
+         printf(" 6");
+         assert(chprio(pid1, 127) == 131);
+         assert(signal(sem) == 0);
+         printf(" 8");
+         assert(signaln(sem, 2) == 0);
+         printf(" 10");
+         assert(waitpid(pid1, 0) == pid1);
+         assert(scount(sem) == 0xffff); // Revoir les entiers signés (bits de poids faible etc.)
+         assert(kill(pid2) == 0);
+         assert(getprio(pid2) < 0);
+         assert(chprio(pid2, 129) < 0);
+         assert(scount(sem) == 0);
+         assert(signal(sem) == 0);
+         assert(scount(sem) == 1);
+         assert(sdelete(sem) == 0);
+         assert(waitpid(-1, 0) == pid2);
+         printf(" 12.\n");
+         return 0;
+ }
+
+ static int proc14_1(void *arg)
+ {
+         int sem = (int)arg;
+         printf("1");
+         assert(wait(sem) == 0);
+         printf(" 5");
+         assert(wait(sem) == 0);
+         printf(" 11");
+         exit(1);
+ }
+
+ static int proc14_2(void *arg)
+ {
+         int sem = (int)arg;
+         printf(" 3");
+         assert(wait(sem) == 0);
+         printf(" 7");
+         assert(wait(sem) == 0);
+         printf(" 9");
+         assert(wait(sem) == 0);
+         printf(" X");
+         return 2;
+ }
 
 /*-----------------*
  *      Test 15
