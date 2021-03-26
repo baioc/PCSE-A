@@ -10,7 +10,6 @@ static hash_t g_uapps;
 
 // NOTE: while (void *) wouldn't usually be needed, its done to cast away const
 
-#include "stdio.h"
 void uapps_init(void)
 {
 	hash_init_string(&g_uapps);
@@ -18,7 +17,6 @@ void uapps_init(void)
 		assert(uapp->start != NULL);
 		assert(uapp->end != NULL);
 		hash_set(&g_uapps, (void *)uapp->name, (void *)uapp);
-		printf("Loaded user application %s\n", uapp->name); // TODO: remove this
 	}
 }
 
