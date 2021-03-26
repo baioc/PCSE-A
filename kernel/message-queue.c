@@ -43,6 +43,10 @@
 
 int valid_fid(int fid);
 
+void sending_message(int fid, int message);
+
+void receiving_message(int fid, int* message);
+
 void remove_waiting_processes(int fid, int value);
 
 /*******************************************************************************
@@ -114,9 +118,7 @@ void remove_waiting_processes(int fid, int value);
    // if the queue is empty, and there are processes waiting to receive a
    // message, we serve the highest priority process
    if(queue_tab[fid]->nb_send == 0 && queue_empty(&queue_tab[fid]->waiting_to_receive) == 0){
-     queue_tab[fid]->nb_send ++;
-     queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
-     queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+     sending_message(fid, message);
      proc* p_to_receive = queue_out(&queue_tab[fid]->waiting_to_receive, proc, node);
      p_to_receive->state = READY;
      queue_add(p_to_receive, &ready_procs, proc, node, priority);
@@ -135,17 +137,13 @@ void remove_waiting_processes(int fid, int value);
        get_current_process()->m_queue_rd_send = 0;
        return -1;
      } else {
-       queue_tab[fid]->nb_send ++;
-       queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
-       queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+       sending_message(fid, message);
        return 0;
      }
    }
    // if the queue is not full, we save the message and return 0
    else {
-     queue_tab[fid]->nb_send ++;
-     queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
-     queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+     sending_message(fid, message);
      return 0;
    }
    return -1;
@@ -163,9 +161,7 @@ void remove_waiting_processes(int fid, int value);
    // if the queue is full and there are processes waiting to send a message,
    // we serve the highest priority process
    if(queue_tab[fid]->nb_send == queue_tab[fid]->lenght && queue_empty(&queue_tab[fid]->waiting_to_send) == 0){
-     queue_tab[fid]->nb_send --;
-     queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
-     *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
+     receiving_message(fid, message);
      proc* p_to_send = queue_out(&queue_tab[fid]->waiting_to_send, proc, node);
      p_to_send->state = READY;
      queue_add(p_to_send, &ready_procs, proc, node, priority);
@@ -184,18 +180,14 @@ void remove_waiting_processes(int fid, int value);
        get_current_process()->m_queue_rd_receive = 0;
        return -1;
      } else {
-       queue_tab[fid]->nb_send --;
-       queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
-       *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
+       receiving_message(fid, message);
        return 0;
      }
    }
 
    // if the queue is not empty, we get the message and return 0
    if(queue_tab[fid]->nb_send != 0){
-     queue_tab[fid]->nb_send --;
-     queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
-     *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
+     receiving_message(fid, message);
      return 0;
    }
 
@@ -221,6 +213,7 @@ void remove_waiting_processes(int fid, int value);
      if(indice_iterator->indice == fid){
        queue_del(indice_iterator, node_indice);
        MQUEUE_UNUSED_ID_ADD(indice_iterator);
+       schedule();
        return 0;
      }
    }
@@ -243,6 +236,8 @@ void remove_waiting_processes(int fid, int value);
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
    queue_tab[fid]->id_received = -1;
+
+   schedule();
 
    return 0;
  }
@@ -287,6 +282,32 @@ void remove_waiting_processes(int fid, int value);
  * Internal function
  ******************************************************************************/
 
+void print_waiting_send_proc(int fid){
+  printf("\n");
+  proc* indice_iterator;
+  queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_send, proc, node){
+    printf(" %i ", indice_iterator->pid);
+  }
+  printf("\n");
+}
+
+void print_waiting_receive_proc(int fid){
+  printf("\n");
+  proc* indice_iterator;
+  queue_for_each(indice_iterator, &queue_tab[fid]->waiting_to_receive, proc, node){
+    printf(" %i ", indice_iterator->pid);
+  }
+  printf("\n");
+}
+
+void print_list(int fid){
+  printf("\n");
+  for(int i = 0; i < queue_tab[fid]->lenght; i++){
+    printf(" %i ", queue_tab[fid]->m_queue[i]);
+  }
+  printf("\n");
+}
+
 // Return 0 if the given fid is valid, -1 otherwise
 int valid_fid(int fid){
   struct indice_queue_tab* indice_iterator;
@@ -297,6 +318,19 @@ int valid_fid(int fid){
   }
   return -1;
 }
+
+void sending_message(int fid, int message){
+  queue_tab[fid]->nb_send ++;
+  queue_tab[fid]->id_send = (queue_tab[fid]->id_send + 1) % queue_tab[fid]->lenght;
+  queue_tab[fid]->m_queue[queue_tab[fid]->id_send] = message;
+}
+
+void receiving_message(int fid, int* message){
+  queue_tab[fid]->nb_send --;
+  queue_tab[fid]->id_received = (queue_tab[fid]->id_received + 1) % queue_tab[fid]->lenght;
+  *message = queue_tab[fid]->m_queue[queue_tab[fid]->id_received];
+}
+
 
 void remove_waiting_processes(int fid, int value){
   // All the processes wainting to send or to receive a message are

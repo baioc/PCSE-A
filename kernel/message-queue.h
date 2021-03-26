@@ -72,4 +72,10 @@
 
  void changing_proc_prio(proc* p);
 
+ void print_list(int fid);
+
+ void print_waiting_send_proc(int fid);
+
+ void print_waiting_receive_proc(int fid);
+
 #endif /* MESSAGE_QUEUE_H */

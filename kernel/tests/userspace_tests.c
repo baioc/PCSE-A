@@ -89,7 +89,7 @@ void run_userspace_tests()
   start(test_8, 0, 128, "test_8", 0);
   start(test_12_msg, 0, 128, "test_12_msg", 0);
   //start(test_13_msg, 0, 128, "test_12_msg", 0);
-  start(test_14_msg, 0, 128, "test_12_msg", 0);
+  start(test_14_msg, 0, 128, "test_14_msg", 0);
 }
 
 /*******************************************************************************
@@ -731,8 +731,11 @@ static int test_12_msg(void *arg){
          assert(psend(fid1, 1) == 0);
          assert(psend(fid1, 2) == 0);
          assert(psend(fid1, 3) == 0);
+
          assert(psend(fid1, 4) == 0);
+
          assert(psend(fid1, 5) < 0);
+
          printf(" 6 t14");
          assert(psend(fid1, 12) < 0);
          printf(" 9 t14");
@@ -752,9 +755,11 @@ static int test_12_msg(void *arg){
 
          printf(" 3 t14");
          assert(preceive(fid1, &fid2) == 0);
+
          assert(fid2 == 44);
          fid2 -= 42;
          assert(psend(fid1, 6) < 0);
+
          printf(" 5 t14");
          assert(psend(fid1, 7) == 0);
          assert(psend(fid1, 8) == 0);
@@ -788,14 +793,30 @@ static int test_12_msg(void *arg){
          assert(fid1 >= 0);
          assert(psend(fid1, fid2 + 42) == 0);
          pid1 = start(psender_14_1, 4000, 131, "psender_14_1", (void *)fid1);
+
          pid2 = start(psender_14_2, 4000, 130, "psender_14_2", (void *)fid1);
+
          assert((preceive(fid1, &msg) == 0) && (msg == 1));
+
          assert(chprio(pid2, 132) == 130);
          printf(" 4 t14");
+         print_list(fid1);
+         
+         print_waiting_send_proc(fid1);
+         print_waiting_receive_proc(fid1);
          assert(preset(fid1) == 0);
+         print_list(fid1);
+         print_waiting_send_proc(fid1);
+         print_waiting_receive_proc(fid1);
+
          assert((preceive(fid1, &msg) == 0) && (msg == 7));
          printf(" 7 t14");
+         print_list(fid1);
+         print_waiting_send_proc(fid1);
+         print_waiting_receive_proc(fid1);
          assert(pdelete(fid1) == 0);
+
+
          printf(" 10 t14");
          assert(psend(fid2, 15) == 0);
          assert(preset(fid2) == 0);
