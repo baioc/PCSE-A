@@ -70,6 +70,10 @@ static int p_sender_13_msg(void *arg);*/
  static int psender_14_1(void *arg);
  static int psender_14_2(void *arg);
 
+ static int test_15_msg(void *arg);
+ static int psmg_15_1(void *arg);
+ static int psmg_15_2(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -90,6 +94,7 @@ void run_userspace_tests()
   start(test_12_msg, 0, 128, "test_12_msg", 0);
   //start(test_13_msg, 0, 128, "test_12_msg", 0);
   start(test_14_msg, 0, 128, "test_14_msg", 0);
+  start(test_15_msg, 0, 128, "test_15_msg", 0);
 }
 
 /*******************************************************************************
@@ -801,7 +806,7 @@ static int test_12_msg(void *arg){
          assert(chprio(pid2, 132) == 130);
          printf(" 4 t14");
          print_list(fid1);
-         
+
          print_waiting_send_proc(fid1);
          print_waiting_receive_proc(fid1);
          assert(preset(fid1) == 0);
@@ -832,7 +837,77 @@ static int test_12_msg(void *arg){
 /*-----------------*
  *      Test 15
  *-----------------*/
-// TODO: Add test_15 when semaphore/message queue are available
+ /*******************************************************************************
+  * Test 15
+  *
+  * Tuer des processus en attente sur file
+  ******************************************************************************/
+
+  static int psmg_15_1(void *arg)
+  {
+          int fid1 = (int)arg;
+
+          printf(" 2");
+          assert(psend(fid1, 1) == 0);
+          assert(psend(fid1, 2) == 0);
+          assert(psend(fid1, 3) == 0);
+          assert(psend(fid1, 4) == 0);
+          assert(psend(fid1, 5) == 457);
+          return 1;
+  }
+
+  static int psmg_15_2(void *arg)
+  {
+          int fid1 = (int)arg;
+
+          printf(" 3");
+          assert(psend(fid1, 6) == 0);
+          assert(psend(fid1, 7) == 457);
+          return 1;
+  }
+
+ static int test_15_msg(void *arg)
+ {
+         int pid1, pid2, fid1;
+         int msg;
+         int count = 1;
+         int r = 1;
+
+         (void)arg;
+
+         assert((fid1 = pcreate(3)) >= 0);
+         printf("1");
+         assert(getprio(getpid()) == 128);
+         pid1 = start(psmg_15_1, 4000, 131, "psmg_15_1", (void *)fid1);
+         assert(pid1 > 0);
+         pid2 = start(psmg_15_2, 4000, 130, "pmsg_15_2", (void *)fid1);
+         assert(pid2 > 0);
+
+         assert((preceive(fid1, &msg) == 0) && (msg == 1));
+         assert(kill(pid1) == 0);
+         assert(kill(pid1) < 0);
+         assert((preceive(fid1, &msg) == 0) && (msg == 2));
+         assert(kill(pid2) == 0);
+         assert(kill(pid2) < 0);
+         assert(preceive(fid1, &msg) == 0);
+         assert(msg == 3);
+         assert(preceive(fid1, &msg) == 0);
+         assert(msg == 4);
+         assert(preceive(fid1, &msg) == 0);
+         assert(msg == 6);
+         assert(pcount(fid1, &count) == 0);
+         assert(count == 0);
+         assert(waitpid(pid1, &r) == pid1);
+         assert(r == 0);
+         r = 1;
+         assert(waitpid(-1, &r) == pid2);
+         assert(r == 0);
+         assert(pdelete(fid1) == 0);
+         assert(pdelete(fid1) < 0);
+         printf(" 4.\n");
+         return 0;
+ }
+
 
 /*-----------------*
  *      Test 16

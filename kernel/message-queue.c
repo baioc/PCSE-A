@@ -201,7 +201,7 @@ void remove_waiting_processes(int fid, int value);
      return -1;
    }
 
-   remove_waiting_processes(fid, 0);
+   remove_waiting_processes(fid, 1);
 
    // we delete the message queue corresponding to fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
