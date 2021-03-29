@@ -77,7 +77,7 @@ void remove_waiting_processes(int fid, int value);
  int pcreate(int count){
    // if the lenght "count" is not valid or if there is not space to create a
    // new messsage queue, return -1
-   if(count <= 0 || queue_empty(&indice_unused_gestion)){
+   if(count <= 0 || queue_empty(&indice_unused_gestion) || MAXMEMSIZE < count){
      return -1;
    }
 

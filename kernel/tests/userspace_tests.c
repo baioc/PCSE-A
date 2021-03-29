@@ -791,7 +791,7 @@ static int test_12_msg(void *arg){
          (void)arg;
 
          /* Bravo si vous n'etes pas tombe dans le piege. */
-         //assert(pcreate(1073741827) < 0);
+         assert(pcreate(1073741827) < 0);
 
          printf(" 1 t14");
          assert(getprio(getpid()) == 128);
