@@ -20,11 +20,3 @@ ctx_sw:
     movl 16(%eax), %edi
     # give the cpu to the process by returning to it with the updated %esp
     ret
-
-    .text
-    .globl proc_exit
-# The sole reason this needs to be in assembly is to get the return value from
-# the exiting process' main routine and pass it correctly to the real exit().
-proc_exit:
-    pushl %eax
-    call exit

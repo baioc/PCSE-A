@@ -42,16 +42,14 @@ void process_init(void);
 /// Ticks the current process time, may end up calling the scheduler.
 void process_tick(void);
 
-/*
- * Create a process
- * pt_func : main function of process
- * ssize : size of stack
- * prio : priority of process for execution
- * name : name of process, must be null-terminated
- * arg : arguments passed to the main function pt_func
+/**
+ * Creates and starts a new a process.
+ * name : name of user program to find among the system's apps.
+ * ssize : size of user stack, in bytes.
+ * prio : priority of process for execution.
+ * arg : generic, word-sized, argument passed to the created process' main().
  */
-int start(int (*pt_func)(void *), unsigned long ssize, int prio,
-          const char *name, void *arg);
+int start(const char *name, unsigned long ssize, int prio, void *arg);
 
 /// Terminates the current process with the given exit code.
 void exit(int retval);
@@ -59,24 +57,20 @@ void exit(int retval);
 /// Kills the process with the given pid, returning 0 on success.
 int kill(int pid);
 
-/*
- * Change priority of process referenced by pid to the value newprio
- * If priority changed and the process was in a queue, it needs to be placed
- * again in that queue depending on its new priority.
- * If the value of newprio is invalid, return value must be < 0. Otherwise,
- * return value is the previous priority of process
+/**
+ * Change priority of process referenced by pid to the value newprio.
+ * If the value of newprio is invalid, return value is negative.
+ * Otherwise, return value is the previous priority of process
  */
 int chprio(int pid, int newprio);
 
-/*
- * If value of pid is invalid, return value must be < 0. Otherwise, return value
- * is the current priority of process referenced by pid
+/**
+ * If value of pid is invalid, return value is negative. Otherwise, returns
+ * the current priority of process referenced by pid.
  */
 int getprio(int pid);
 
-/*
- * Returns pid of the calling process.
- */
+/// Returns pid of the calling process.
 int getpid(void);
 
 /// Makes the current process yield the CPU for at least TICKS jiffies.
