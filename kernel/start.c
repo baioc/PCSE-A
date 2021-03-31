@@ -1,6 +1,7 @@
 #include "console.h"
 #include "clock.h"
 #include "process.h"
+#include "shared_memory.h"
 
 #ifdef KERNEL_TEST
 #include "kernel_tests.h"
@@ -10,6 +11,7 @@ void kernel_start(void)
 {
   console_init();
   clock_init();
+  shm_init();
 
 #ifdef KERNEL_TEST
   kernel_run_general_tests();
