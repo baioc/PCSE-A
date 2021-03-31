@@ -569,7 +569,7 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
 
   // map region in chunks of maximum size equal to that of a page
   while (size != 0) {
-    const size_t chunk = size % (PAGE_SIZE + 1);
+    const size_t chunk = size >= PAGE_SIZE ? PAGE_SIZE : size;
 
     // try to allocate a page for the actual data
     struct page *page = page_alloc();
