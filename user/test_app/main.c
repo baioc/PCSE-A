@@ -2,8 +2,6 @@
 
 int main(void)
 {
-  while (1) {
-    printf(".");
-  }
+  printf("Hello, User World!");
   return 0;
 }

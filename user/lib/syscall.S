@@ -84,4 +84,19 @@ FN:;                      \
 
 /* Definitions: */
 
+/* console.h */
 DEFN_SYSCALL2(console_putbytes)
+
+/* clock.h */
+DEFN_SYSCALL2(clock_settings)
+DEFN_SYSCALL0(current_clock)
+DEFN_SYSCALL1(wait_clock)
+
+/* process.h */
+DEFN_SYSCALL4(start)
+DEFN_SYSCALL0(getpid)
+DEFN_SYSCALL1(getprio)
+DEFN_SYSCALL2(chprio)
+DEFN_SYSCALL1(kill)
+DEFN_SYSCALL2(waitpid)
+DEFN_SYSCALL1(exit)

@@ -9,13 +9,6 @@
 
 #define WEAK_STUB(symbol)       .weak symbol; symbol:
 
-WEAK_STUB(start)
-WEAK_STUB(getpid)
-WEAK_STUB(getprio)
-WEAK_STUB(chprio)
-WEAK_STUB(kill)
-WEAK_STUB(waitpid)
-WEAK_STUB(exit)
 WEAK_STUB(cons_write)
 WEAK_STUB(cons_read)
 WEAK_STUB(cons_echo)
@@ -33,9 +26,6 @@ WEAK_STUB(pdelete)
 WEAK_STUB(preceive)
 WEAK_STUB(preset)
 WEAK_STUB(psend)
-WEAK_STUB(clock_settings)
-WEAK_STUB(current_clock)
-WEAK_STUB(wait_clock)
 WEAK_STUB(sys_info)
 WEAK_STUB(shm_create)
 WEAK_STUB(shm_acquire)

@@ -254,7 +254,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   uint32_t *stack_bottom = translate(new_proc->page_dir, MMAP_STACK_BOTTOM);
   assert(stack_bottom != NULL);
   stack_bottom[0] = (uint32_t)arg;
-  stack_bottom[-1] = (uint32_t)NULL; // TODO: setup userspace termination
+  stack_bottom[-1] = (uint32_t)NULL;
 
   // setup kernel stack that moves to userspace on RET
   new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = (uint32_t)new_proc->page_dir;

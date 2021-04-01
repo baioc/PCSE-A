@@ -15,6 +15,8 @@
 #include "interrupts.h"
 
 #include "console.h"
+#include "clock.h"
+#include "process.h"
 
 extern void syscall_handler(void);
 
@@ -40,6 +42,16 @@ extern void syscall_handler(void);
 
 static void *syscalls[] = {
     SYSCALL_ENTRY(console_putbytes),
+    SYSCALL_ENTRY(chprio),
+    SYSCALL_ENTRY(clock_settings),
+    SYSCALL_ENTRY(current_clock),
+    SYSCALL_ENTRY(exit),
+    SYSCALL_ENTRY(getpid),
+    SYSCALL_ENTRY(getprio),
+    SYSCALL_ENTRY(kill),
+    SYSCALL_ENTRY(start),
+    SYSCALL_ENTRY(wait_clock),
+    SYSCALL_ENTRY(waitpid),
 };
 
 /*******************************************************************************
