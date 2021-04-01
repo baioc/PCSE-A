@@ -62,7 +62,7 @@ void set_interrupt_handler(int num, void (*handler)(void))
       .upper_addr = (addr & 0xFFFF0000) >> 16,
       .lower_addr = addr & 0x0000FFFF,
       .selector = KERNEL_CS,
-      .attributes = 0b10001110, // no privilege, trap storage, 16b trap gate
+      .attributes = 0x8E, // present, DPL=0, no storage, 32b intr gate
   };
 
   idt[num] = *((uint64_t *)&entry);

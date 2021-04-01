@@ -60,21 +60,20 @@ SERV_EXC_TASK(30)
 SERV_EXC_TASK(31)
 
 
-#define DEFINE_INTERRUPT_HANDLER(FUNCTION)                         \
-	.text;                                                         \
-	.globl FUNCTION##_handler;                                     \
-FUNCTION##_handler:                                                \
-	/* save scratch registers (eflags is handled automatically) */ \
-	pushl %eax;                                                    \
-	pushl %edx;                                                    \
-	pushl %ecx;                                                    \
-	/* call the actual handler code (saves non-scratch regs) */    \
-	call FUNCTION;                                                 \
-	/* restore registers */                                        \
-	popl %ecx;                                                     \
-	popl %edx;                                                     \
-	popl %eax;                                                     \
-	/* return from the interrupt handler */                        \
+/* NOTE: these handlers are evoked by intr gates, so interrupts are disabled */
+#define DEFINE_INTERRUPT_HANDLER(FUNCTION)                                   \
+	.text;                                                                   \
+	.globl FUNCTION##_handler;                                               \
+FUNCTION##_handler:                                                          \
+	/* call actual handler */                                                \
+	pushl %eax;                                                              \
+	pushl %edx;                                                              \
+	pushl %ecx;                                                              \
+	call FUNCTION;                                                           \
+	popl %ecx;                                                               \
+	popl %edx;                                                               \
+	popl %eax;                                                               \
+	/* return re-enables interrupts */                                       \
 	iret
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */

@@ -18,8 +18,8 @@
 #include "mem.h"
 #include "string.h"
 #include "stdbool.h"
-#include "userspace_apps.h"
 #include "clock.h"
+#include "userspace_apps.h"
 
 /*******************************************************************************
  * Macros
@@ -33,9 +33,6 @@
 
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
-
-// User RW page.
-#define PAGE_USER_FLAGS (PAGE_USER | PAGE_WRITE | PAGE_PRESENT)
 
 // Userspace virtual mappings.
 #define MMAP_USER_START   0x40000000 /* 1 GiB */
@@ -55,13 +52,14 @@ enum proc_state {
   ACTIVE,         // process currently running on processor => current_process
 };
 
-// NOTE: must be kept in sync with ctx_sw()
+// Process execution context IN KERNELSPACE. Must be kept in sync with ctx_sw()
 struct context {
-  unsigned ebx;
-  unsigned esp;
-  unsigned ebp;
-  unsigned esi;
-  unsigned edi;
+  uint32_t ebx;
+  uint32_t esp;
+  uint32_t ebp;
+  uint32_t esi;
+  uint32_t edi;
+  uint32_t cr3;
 };
 
 struct proc {
@@ -93,8 +91,7 @@ struct proc {
   int retval;
 
   // paging structures
-  uint32_t *   cr3;
-  uint32_t     page_dir[PAGE_TABLE_LENGTH];
+  uint32_t *   page_dir;
   struct page *pages; // physical pages currently owned by this process
 };
 
@@ -104,6 +101,9 @@ struct proc {
 
 /// Changes context between two processes, see ctx_sw.S
 extern void ctx_sw(struct context *old, struct context *new);
+
+/// Forges an interrupt stack and IRETs to userspace, see ctx_sw.S
+extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
 
 /// Makes the current process yield the CPU to the scheduler.
 static void schedule(void);
@@ -131,19 +131,22 @@ static void destroy(struct proc *proc);
  * BASE must be a page-aligned address.
  *
  * Note that this procedure will acquire physical pages for the allocated
- * region, as well as for any needed page tables, while applying FLAGS to these
- * page dir/table entries.
+ * region, as well as for any needed page tables, while applying user flags to
+ * these page dir/table entries.
  *
  * On success, returns the highest mapped virtual address (so that+1 gives the
  * next page-aligned unmapped virtual address that could be used for subsequent
- * regions), otherwise undoes all effects and returns 0.
+ * regions), otherwise returns 0 (and the page directory is now invalid).
  */
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            unsigned flags, const void *contents);
+                            const void *contents);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
+// Kernel page directory.
+extern unsigned pgdir[];
 
 // Table of ALL processes, indexed by their pid.
 static struct proc process_table[NBPROC + 1];
@@ -184,19 +187,17 @@ void process_init(void) // only called from kernel space
     queue_add(proc, &free_procs, struct proc, node, pid);
   }
 
-  // TODO: idle's paging structures, ctx and kernel stack
-
   // idle must be the first process to run
   current_process = IDLE_PROC;
   IDLE_PROC->state = ACTIVE;
-  IDLE_PROC->time.quantum = 1;
+  IDLE_PROC->time.quantum = 0;
   idle();
 }
 
 void process_tick(void)
 {
   assert(current_process->state == ACTIVE);
-  if (current_process->time.quantum-- <= 1) schedule();
+  if (current_process->time.quantum-- == 0) schedule();
 }
 
 int start(const char *name, unsigned long ssize, int prio, void *arg)
@@ -219,50 +220,49 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
   if (new_proc->kernel_stack == NULL) return -1;
 
-  // initialize empty page dir, owned page list and cr3 slot
-  // TODO: do we need to map kernel space? it contains our own page tables...
-  memset(new_proc->page_dir, 0, sizeof(new_proc->page_dir));
-  new_proc->cr3 = new_proc->page_dir;
-  new_proc->pages = NULL;
+  // initialize frame list and pagedir (copy kernel's first 64 pgdir entries)
+  new_proc->pages = page_alloc();
+  if (new_proc->pages == NULL) goto FAIL_FREE_STACK;
+  new_proc->pages->next = NULL;
+  new_proc->page_dir = (uint32_t *)(new_proc->pages->frame * PAGE_SIZE);
+  memcpy(new_proc->page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
   // map and copy application code into process virtual memory
   const uint32_t app_last = mmap_region(new_proc,
                                         MMAP_USER_START,
                                         (char *)app->end - (char *)app->start,
-                                        PAGE_USER_FLAGS,
                                         app->start);
-  if (app_last == 0) goto FAIL_MAP_APP;
+  if (app_last == 0) goto FAIL_FREE_PAGES;
 
   // allocate and map user stack (NOTE: stack bottom === highest stack address)
-  ssize += 3 * sizeof(int); // adjust stack size based on what we insert therein
+  ssize += 2 * sizeof(uint32_t); // adjust stack size based on what we insert
   uint32_t stack_first = (MMAP_STACK_BOTTOM - ssize) + 1;
   stack_first -= stack_first % PAGE_SIZE; // round down to page-aligned address
   // we don't use the entire memory space, so data and stack memory really can't
   // bump into each other, but we'll add the check anyway while making sure
-  // there's at least one unmapped page between them  to catch stack overflows
-  if (stack_first - PAGE_SIZE <= app_last) goto FAIL_MAP_STACK;
-  const uint32_t stack_last = mmap_region(new_proc,
-                                          stack_first,
-                                          (MMAP_STACK_BOTTOM - stack_first) + 1,
-                                          PAGE_USER_FLAGS,
-                                          NULL);
-  if (stack_last == 0) goto FAIL_MAP_STACK;
+  // there's at least one unmapped page between them (to catch stack overflows)
+  if (stack_first - PAGE_SIZE <= app_last) goto FAIL_FREE_PAGES;
+  const uint32_t stack_last = mmap_region(
+      new_proc, stack_first, (MMAP_STACK_BOTTOM - stack_first) + 1, NULL);
+  if (stack_last == 0) goto FAIL_FREE_PAGES;
   assert(stack_last == MMAP_STACK_BOTTOM);
 
-  // setup initial user stack
+  // setup initial user stack with the given arg
   uint32_t *stack_bottom = translate(new_proc->page_dir, MMAP_STACK_BOTTOM);
   assert(stack_bottom != NULL);
   stack_bottom[0] = (uint32_t)arg;
-  stack_bottom[-1] = (uint32_t)NULL; // TODO: setup termination in userspace
-  stack_bottom[-2] = (uint32_t)MMAP_USER_START; // userspace entrypoint
-  new_proc->ctx = (struct context){.esp = MMAP_STACK_BOTTOM - 2};
+  stack_bottom[-1] = (uint32_t)NULL; // TODO: setup userspace termination
 
-  // TODO: what do we do with the kernel stack?
-  // new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = (unsigned)(arg);
-  // new_proc->kernel_stack[KERNEL_STACK_SIZE - 2] = (unsigned)(proc_exit);
-  // new_proc->kernel_stack[KERNEL_STACK_SIZE - 3] = (unsigned)(pt_func);
-  // new_proc->ctx.esp = (unsigned)(&(new_proc->kernel_stack[KERNEL_STACK_SIZE -
-  // 3]));
+  // setup kernel stack that moves to userspace on RET
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = (uint32_t)new_proc->page_dir;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 2] = MMAP_STACK_BOTTOM - 1;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 3] = MMAP_USER_START;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 4] = (uint32_t)NULL;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 5] = (uint32_t)switch_mode_user;
+  new_proc->ctx = (struct context){
+      .esp = (uint32_t)(&new_proc->kernel_stack[KERNEL_STACK_SIZE - 5]),
+      .cr3 = (uint32_t)new_proc->page_dir,
+  };
 
   // initialize children list and filiate itself to parent
   new_proc->children = (link)LIST_HEAD_INIT(new_proc->children);
@@ -282,13 +282,13 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 
   return new_proc->pid;
 
-FAIL_MAP_STACK:
+FAIL_FREE_PAGES:
   while (new_proc->pages != NULL) {
     struct page *page = new_proc->pages;
     new_proc->pages = page->next;
     page_free(page);
   }
-FAIL_MAP_APP:
+FAIL_FREE_STACK:
   mem_free(new_proc->kernel_stack, KERNEL_STACK_SIZE * sizeof(int));
   return -1;
 }
@@ -558,14 +558,10 @@ static void idle(void)
 }
 
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            unsigned flags, const void *contents)
+                            const void *contents)
 {
   assert(base % PAGE_SIZE == 0); // assert alignment
-
-  // we need a buffer in order to make the pagedir modifications atomic
-  static uint32_t page_dir[PAGE_TABLE_LENGTH];
-  memcpy(page_dir, proc->page_dir, sizeof(page_dir));
-  struct page *pages = proc->pages;
+  const unsigned flags = (PAGE_USER | PAGE_WRITE | PAGE_PRESENT); // user R/W
 
   // map region in chunks of maximum size equal to that of a page
   while (size != 0) {
@@ -573,9 +569,9 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
 
     // try to allocate a page for the actual data
     struct page *page = page_alloc();
-    if (page == NULL) goto FAIL_PAGE_ALLOC;
-    page->next = pages;
-    pages = page;
+    if (page == NULL) return 0;
+    page->next = proc->pages;
+    proc->pages = page;
 
     // compute page-aligned addresses, both virtual and physical
     const uint32_t virt = base;
@@ -588,17 +584,17 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     }
 
     // we might need to allocate a page table as well
-    int pde = page_map(page_dir, virt, real, flags);
+    int pde = page_map(proc->page_dir, virt, real, flags);
     if (pde >= 0) {
       // fortunately, it fits exactly in a page
       struct page *page_tab = page_alloc();
-      if (page_tab == NULL) goto FAIL_PAGE_ALLOC;
-      page_tab->next = pages;
-      pages = page_tab;
+      if (page_tab == NULL) return 0;
+      page_tab->next = proc->pages;
+      proc->pages = page_tab;
 
       // add page directory entry, then try the mapping again (should work now)
-      page_dir[pde] = (page_tab->frame * PAGE_SIZE) | flags;
-      pde = page_map(page_dir, virt, real, flags);
+      proc->page_dir[pde] = (page_tab->frame * PAGE_SIZE) | flags;
+      pde = page_map(proc->page_dir, virt, real, flags);
       assert(pde < 0);
     }
 
@@ -606,17 +602,5 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     size -= chunk;
   }
 
-  // => all went well so we can overwrite the process' paging fields
-  memcpy(proc->page_dir, page_dir, sizeof(page_dir));
-  proc->pages = pages;
   return base - 1;
-
-  // in case of failure, make sure not to leak physical pages
-FAIL_PAGE_ALLOC:
-  while (pages != proc->pages) {
-    struct page *page = pages;
-    pages = page->next;
-    page_free(page);
-  }
-  return 0;
 }

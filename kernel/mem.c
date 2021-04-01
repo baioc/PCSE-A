@@ -67,7 +67,7 @@ int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags)
 
   // setup address translation, applying flags and marking target as present
   pgtab[pt_index] = real | (flags & 0xFFF) | PAGE_PRESENT;
-  // NOTE: no need to flush TLB, it will be done automatically by the hardware
+  // NOTE: no need to flush TLB, it will be done automatically on ctx_sw()
 
   return -1; // === ok
 }

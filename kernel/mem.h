@@ -11,7 +11,7 @@
  * Macros
  ******************************************************************************/
 
-#define PAGE_SIZE 0x1000 /* 4 KiB */
+#define PAGE_SIZE 4096 /* 4 KiB */
 
 #define PAGE_TABLE_LENGTH 1024
 
