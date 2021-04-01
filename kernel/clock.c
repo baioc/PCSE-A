@@ -14,7 +14,12 @@
 #include "cpu.h"
 #include "stdint.h"
 #include "interrupts.h"
-#include "process.h"
+
+/// Ticks the current process time, may end up calling the scheduler.
+extern void process_tick(void);
+
+/// Makes the current process yield the CPU for at least TICKS jiffies.
+extern void sleep(unsigned long ticks);
 
 extern void clock_tick_handler(void);
 
@@ -33,8 +38,6 @@ extern void clock_tick_handler(void);
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
-
-void clock_tick(void);
 
 /*******************************************************************************
  * Variables
@@ -60,7 +63,7 @@ void clock_init(void)
   g_jiffies = 0;
 
   // setup intr handler and unmask IRQ
-  set_interrupt_handler(32, clock_tick_handler);
+  set_interrupt_handler(32, clock_tick_handler, PL_KERNEL);
   mask_irq(0, false);
 }
 
@@ -75,14 +78,10 @@ unsigned long current_clock(void)
   return g_jiffies;
 }
 
-void wait_clock(unsigned long clock)
+void wait_clock(unsigned long ticks)
 {
-  sleep(clock);
+  sleep(ticks);
 }
-
-/*******************************************************************************
- * Internal function
- ******************************************************************************/
 
 void clock_tick(void)
 {
@@ -95,3 +94,7 @@ void clock_tick(void)
   // increment process time
   process_tick();
 }
+
+/*******************************************************************************
+ * Internal function
+ ******************************************************************************/

@@ -44,7 +44,7 @@
  * Public function
  ******************************************************************************/
 
-void set_interrupt_handler(int num, void (*handler)(void))
+void set_interrupt_handler(int num, void (*handler)(void), unsigned char pl)
 {
   assert(num >= 32); // 0-31 are used by trap gates in processor_structs.c
   assert((unsigned)num < (sizeof(idt) / sizeof(idt[0])));
@@ -62,7 +62,7 @@ void set_interrupt_handler(int num, void (*handler)(void))
       .upper_addr = (addr & 0xFFFF0000) >> 16,
       .lower_addr = addr & 0x0000FFFF,
       .selector = KERNEL_CS,
-      .attributes = 0x8E, // present, DPL=0, no storage, 32b intr gate
+      .attributes = 0x80 | ((pl & 0b11) << 5) | 0x0E,
   };
 
   idt[num] = *((uint64_t *)&entry);

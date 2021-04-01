@@ -65,7 +65,7 @@ SERV_EXC_TASK(31)
 	.text;                                                                   \
 	.globl FUNCTION##_handler;                                               \
 FUNCTION##_handler:                                                          \
-	/* call actual handler */                                                \
+	/* call actual handler (also save all scratch registers) */              \
 	pushl %eax;                                                              \
 	pushl %edx;                                                              \
 	pushl %ecx;                                                              \
@@ -77,3 +77,19 @@ FUNCTION##_handler:                                                          \
 	iret
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
+
+
+/* Syscall parameter handler: simply passes reified args to do_syscall() */
+	.text
+	.globl syscall_handler
+syscall_handler:
+	/* push args in reverse order */
+	pushl %edi
+	pushl %esi
+	pushl %edx
+	pushl %ecx
+	pushl %ebx
+	pushl %eax
+	call do_syscall /* return code is in EAX */
+	add $(6*4), %esp /* remember to restore stack frame */
+	iret

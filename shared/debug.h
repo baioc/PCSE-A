@@ -44,8 +44,7 @@ extern void panic(const char *fmt, ...) __attribute__((noreturn, format (printf,
 
 #define assert(expr) \
 	((void)((expr) ? 0 : \
-		(panic(__FILE__":%u: failed assertion `%s'\n", \
-			__LINE__, #expr), 0)))
+		(panic(__FILE__":%u: failed assertion `%s'\n", __LINE__, #expr), 0)))
 
 #endif
 

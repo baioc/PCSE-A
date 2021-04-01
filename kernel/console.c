@@ -77,17 +77,6 @@ void console_putbytes(const char *s, int len)
   }
 }
 
-/* affichage a une possition fixe */
-void console_write_raw(const char *s, int len, int line, int column)
-{
-  if (line >= CONSOLE_H || column >= CONSOLE_L) return;
-  const int maxc = CONSOLE_L - line;
-
-  for (int i = 0; i < maxc && i < len; i++) {
-    ecrit_car(line, column + i, s[i], CL_NOIR, CL_MARRON | CL_LIGHT);
-  }
-}
-
 /*******************************************************************************
  * Internal function
  ******************************************************************************/

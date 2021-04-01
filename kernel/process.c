@@ -31,6 +31,9 @@
 // Kernel stack size, in words.
 #define KERNEL_STACK_SIZE 512
 
+/// Scheduling frequency in Hz, meaning a quantum has 1/SCHEDFREQ seconds.
+#define SCHEDFREQ 50
+
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
@@ -326,7 +329,7 @@ int chprio(int pid, int newprio)
   // unreachable
   case ZOMBIE:
   case DEAD:
-    assert(false);
+    BUG();
   }
 
   return old_prio;
@@ -349,9 +352,7 @@ void exit(int retval)
 {
   zombify(current_process, retval);
   schedule();
-  for (assert(false);;) { // assert is just a sanity check
-    // ensures gcc marks exit as `noreturn`
-  }
+  BUG(); // unreachable
 }
 
 int kill(int pid)
@@ -369,8 +370,7 @@ int kill(int pid)
   case READY:
   case SLEEPING:
     queue_del(proc, node);
-    zombify(proc, 0);
-    break;
+    /* fall through */
   case AWAITING_CHILD:
     zombify(proc, 0);
     break;
@@ -481,7 +481,7 @@ CHECK_ALARM:
   // unreachable
   case READY:
   case DEAD:
-    assert(false);
+    BUG();
   }
 
   // process that will take control of the execution
