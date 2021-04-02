@@ -61,6 +61,8 @@ static int                suicide(void *arg);
 static unsigned long long div64(unsigned long long x, unsigned long long div,
                                 unsigned long long *rem);*/
 
+static int test_10_sem(void *arg);
+
 static int test_12_msg(void *arg);
 static int rdv_proc_12_msg(void *arg);
 
@@ -112,7 +114,13 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   /*pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);*/
+  pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
+  waitpid(pid,NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
+  waitpid(pid, NULL);
+  pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
+  waitpid(pid, NULL);
+  pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
   waitpid(pid, NULL);
   /*pid = start(test_13_msg, 0, 128, "test_13_msg", 0);
   waitpid(pid, NULL);*/
@@ -120,13 +128,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_15_msg, 0, 128, "test_15_msg", 0);
   waitpid(pid, NULL);
-
-  pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
-    waitpid(pid, NULL);
-  pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
-    waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
-    waitpid(pid, NULL);
+  waitpid(pid, NULL);
 }
 
 /*******************************************************************************
@@ -560,7 +563,25 @@ static int waiter(void *arg)
 /*-----------------*
  *      Test 10
  *-----------------*/
-// TODO: Add test_10 when semaphore/message queue are available
+ int test_10_sem(void *arg)
+ {
+         int sem1;
+         (void)arg;
+         sem1 = screate(2);
+         assert(sem1 >= 0);
+         assert(scount(sem1) == 2);
+         assert(signal(sem1) == 0);
+         assert(scount(sem1) == 3);
+         assert(signaln(sem1, 2) == 0);
+         assert(scount(sem1) == 5);
+         assert(wait(sem1) == 0);
+         assert(scount(sem1) == 4);
+         assert(sreset(sem1, 7) == 0);
+         assert(scount(sem1) == 7);
+         assert(sdelete(sem1) == 0);
+         printf("ok.\n");
+         return 0;
+ }
 
 /*-----------------*
  *      Test 11
