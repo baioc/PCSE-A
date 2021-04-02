@@ -28,6 +28,8 @@ extern void switch_context(uint32_t *old, uint32_t *new);
 /// Forges an interrupt stack and IRETs to userspace, see switch.S
 extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
 
+extern void divide_error_handler(void);
+extern void protection_exception_handler(void);
 extern void page_fault_handler(void);
 
 /*******************************************************************************
@@ -189,6 +191,8 @@ void process_init(void)
   }
 
   // setup pagefault handller
+  set_interrupt_handler(0, divide_error_handler, PL_KERNEL);
+  set_interrupt_handler(13, protection_exception_handler, PL_KERNEL);
   set_interrupt_handler(14, page_fault_handler, PL_KERNEL);
 
   // idle must be the first process to run
@@ -424,9 +428,25 @@ int waitpid(int pid, int *retvalp)
   }
 }
 
+void divide_error(void)
+{
+  printf("Error [%s%%%i]: Divide by zero\n",
+         current_process->name,
+         current_process->pid);
+  exit(128 + 0);
+}
+
+void protection_exception(void)
+{
+  printf("Error [%s%%%i]: General protection fault\n",
+         current_process->name,
+         current_process->pid);
+  exit(128 + 13);
+}
+
 void page_fault(void)
 {
-  printf("[%s%%%i]: Segmentation fault\n",
+  printf("Error [%s%%%i]: Page fault\n",
          current_process->name,
          current_process->pid);
   exit(128 + 14);
