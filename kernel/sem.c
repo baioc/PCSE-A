@@ -2,12 +2,8 @@
  * sem.c
  *
  *  Created on: 03/03/2021
- *      Authors: Antoine Briançon, Thibault Cantori
+ *      Authors: Antoine Briançon
  */
-
-/*  A TERMINER
-  Tests
-*/
 
 /*******************************************************************************
  * Includes
@@ -31,13 +27,14 @@
   int nbr_sem = 0;
 
   semaph list_sem[MAXNBR_SEM];
+  // from process.c
   extern link ready_procs;
   extern proc *current_process;
  /*******************************************************************************
   * Public function
   ******************************************************************************/
   /*
-  Create a semaphore with a counter of count
+  Create a semaphore with a counter value of count
   */
   int screate(short int count){
     if(nbr_sem == MAXNBR_SEM || count < 0) return -1;
@@ -55,7 +52,7 @@
   }
 
   /*
-  Delete the semaphore list_sem[sem]
+  Delete the semaphore list_sem[sem] and free all the process in it list
   */
   int sdelete(int sem){
     if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
@@ -144,10 +141,13 @@
     if((short int)(list_sem[sem].count - 1) > list_sem[sem].count) return -2;
     if(list_sem[sem].sid != sem) return -3;
     list_sem[sem].count -= 1;
-    queue_add(current_process, &(list_sem[sem].list_blocked), proc,
+    if(list_sem[sem].count < 0){
+      current_process->state = BLOCKED;
+      current_process->sid = sem;
+      queue_add(current_process, &(list_sem[sem].list_blocked), proc,
                                                             blocked, priority);
-    current_process->state = BLOCKED;
-    schedule();
+      schedule();
+    }
     return 0;
   }
 
@@ -156,7 +156,7 @@
   */
   int scount(int sem){
     if(sem >= MAXNBR_SEM || sem < 0) return -1;
-    return (int)list_sem[sem].count;
+    return (int)(list_sem[sem].count) & 0x0000ffff;
   }
  /*******************************************************************************
   * Internal function

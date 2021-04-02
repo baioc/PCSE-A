@@ -10,7 +10,6 @@
  ******************************************************************************/
 
 #include "process.h"
-#include "message-queue.h"
 
 /*******************************************************************************
  * Types
@@ -66,6 +65,8 @@ static proc process_table[NBPROC + 1];
 // Current process running on processor.
 proc *current_process = NULL;
 
+// Semaphore list
+extern semaph list_sem[MAXNBR_SEM];
 /*******************************************************************************
  * Public function
  ******************************************************************************/
@@ -198,9 +199,13 @@ int chprio(int pid, int newprio)
     changing_proc_prio(p);
     break;
   // new priority will take effect when it wakes up
+  case BLOCKED:
+    queue_del(p, blocked);    // remove process from the blocked list
+    queue_add(p, &(list_sem[p->sid].list_blocked), proc, blocked, priority);
+    // place it again with the updated priority
+    break;
   case AWAITING_CHILD:
   case SLEEPING:
-  case BLOCKED:
   case ZOMBIE:
     break;
   case DEAD: // unreachable
@@ -214,7 +219,7 @@ int getprio(int pid)
 {
   if (pid < 1 || pid > NBPROC) return -1;
   proc *p = &process_table[pid];
-  if (p->state == DEAD) return -1;
+  if (p->state == DEAD || p->state == ZOMBIE) return -1;
   const int prio = p->priority;
   return prio;
 }
@@ -249,14 +254,13 @@ int kill(int pid)
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
     break;
-  case BLOCKED: // Not the good solution
-    break;
   case READY:
   case SLEEPING:
   case AWAITING_IO:
     queue_del(p, node);
     zombify(p, 0);
     break;
+  case BLOCKED:
   case AWAITING_CHILD:
     zombify(p, 0);
     break;
@@ -354,7 +358,6 @@ CHECK_ALARM:
   // we'll only find a blocked proc here when it has just been blocked
   case BLOCKED:
     printf("\n* %s(%d) just blocked *\n", pass->name, pass->pid);
-    queue_del(pass, node); // delete it from ready proc's list
     break;
 
   // when a process goes to sleep, we put it in a separate queue
@@ -396,6 +399,11 @@ static void filiate(proc *c, proc *p)
 
 static void zombify(proc *p, int retval)
 {
+  if(p->state == BLOCKED){
+    queue_del(p, blocked); // remove process from blocked list
+    list_sem[p->sid].count += 1; // increments counter of semaphore
+  }
+
   p->retval = retval; // store exit code to be read later
   p->state = ZOMBIE;
 

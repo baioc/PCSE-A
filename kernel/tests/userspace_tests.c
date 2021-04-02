@@ -14,6 +14,7 @@
 #include "message-queue.h"
 #include "debug.h"
 #include "shared_memory.h"
+#include "sem.h"
 
 #include "test1.h"
 #include "test4.h"
@@ -75,6 +76,17 @@ static int p_sender_13_msg(void *arg);*/
  static int psmg_15_1(void *arg);
  static int psmg_15_2(void *arg);
 
+static int test_12_sem(void *arg);
+static int proc12_1(void *arg);
+static int proc12_2(void * arg);
+static int proc12_3(void *arg);
+
+static int test_14_sem(void *arg);
+static int proc14_1(void *arg);
+static int proc14_2(void *arg);
+
+static int test_15_sem(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -108,6 +120,13 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_15_msg, 0, 128, "test_15_msg", 0);
   waitpid(pid, NULL);
+
+  pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
+    waitpid(pid, NULL);
+  pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
+    waitpid(pid, NULL);
+  pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
+    waitpid(pid, NULL);
 }
 
 /*******************************************************************************
@@ -552,60 +571,136 @@ static int waiter(void *arg)
  *      Test 12
  *-----------------*/
 
-int rdv_proc_12_msg(void *arg)
-{
-        int fid = (int) arg;
-        int msg;
-        int count;
+ static int test_12_sem(void *arg)
+ {
+         int sem;
+         int pid1, pid2, pid3;
+         int ret;
 
-        printf(" 2");
-        assert(psend(fid, 3) == 0); /* Depose dans le tampon */
-        printf(" 3");
-        assert((pcount(fid, &count) == 0) && (count == 1));
-        assert(psend(fid, 4) == 0); /* Bloque tampon plein */
-        printf(" 5");
-        assert((pcount(fid, &count) == 0) && (count == 1));
-        assert(preceive(fid, &msg) == 0); /* Retire du tampon */
-        assert(msg == 4);
-        printf(" 6");
-        assert(preceive(fid, &msg) == 0); /* Bloque tampon vide. */
-        assert(msg == 5);
-        printf(" 8");
-        assert((pcount(fid, &count) == 0) && (count == 0));
-        return 0;
-}
+         (void)arg;
 
-static int test_12_msg(void *arg){
-  int fid;
-  int pid;
-  int msg;
-  int count;
+         assert(getprio(getpid()) == 128);
+         assert((sem = screate(1)) >= 0);
+         pid1 = start(proc12_1, 4000, 129, "proc12_1", (void *)sem);
+         assert(pid1 > 0);
+         printf(" 2");
+         pid2 = start(proc12_2, 4000, 127, "proc12_2", (void *)sem);
+         assert(pid2 > 0);
+         pid3 = start(proc12_3, 4000, 130, "proc12_3", (void *)sem);
+         assert(pid3 > 0);
+         printf(" 4");
+         assert(chprio(getpid(), 126) == 128);
+         printf(" 6");
+         assert(chprio(getpid(), 128) == 126);
+         assert(signaln(sem, 2) == 0);
+         assert(signaln(sem, 1) == 0);
+         assert(signaln(sem, 4) == 0);
+         assert(waitpid(pid1, &ret) == pid1);
+         assert(ret == 1);
+         assert(waitpid(-1, &ret) == pid3);
+         assert(ret == 0);
+         assert(scount(sem) == 1);
+         assert(sdelete(sem) == 0);
+         printf(" 12");
+         assert(waitpid(-1, &ret) == pid2);
+         assert(ret == 2);
+         printf(" 14.\n");
+         return 0;
+ }
 
-  (void)arg;
+ static int proc12_1(void *arg)
+ {
+         int sem = (int)arg;
+         assert(try_wait(sem) == 0);
+         assert(try_wait(sem) == -3);
+         printf("1");
+         assert(wait(sem) == 0);
+         printf(" 8");
+         assert(wait(sem) == 0);
+         printf(" 11");
+         exit(1);
+         return 0;
+ }
 
-  assert(getprio(getpid()) == 128);
-  assert((fid = pcreate(1)) >= 0);
-  printf("1");
-  pid = start(rdv_proc_12_msg, 4000, 130, "rdv_proc_12_msg", (void *)fid);
-  assert(pid > 0);
-  printf(" 4");
-  assert((pcount(fid, &count) == 0) && (count == 2));
-  assert(preceive(fid, &msg) == 0); /* Retire du tampon et debloque un emetteur. */
-  assert(msg == 3);
-  printf(" 7");
-  assert((pcount(fid, &count) == 0) && (count == -1));
-  assert(psend(fid, 5) == 0); /* Pose dans le tampon. */
-  printf(" 9");
-  assert(psend(fid, 6) == 0); /* Pose dans le tampon. */
-  assert(preceive(fid, &msg) == 0); /* Retire du tampon. */
-  assert(msg == 6);
-  assert(pdelete(fid) == 0);
-  assert(psend(fid, 2) < 0);
-  assert(preceive(fid, &msg) < 0);
-  assert(waitpid(-1, 0) == pid);
-  printf(" 10.\n");
-  return 0;
-}
+ static int proc12_2(void * arg)
+ {
+         int sem = (int)arg;
+         printf(" 5");
+         assert(wait(sem) == 0);
+         printf(" 13");
+         return 2;
+ }
+
+ static int proc12_3(void *arg)
+ {
+         int sem = (int)arg;
+         printf(" 3");
+         assert(wait(sem) == 0);
+         printf(" 7");
+         assert(wait(sem) == 0);
+         printf(" 9");
+         assert(wait(sem) == 0);
+         printf(" 10");
+         kill(getpid());
+         assert(!"Should not arrive here !");
+         while(1);
+         return 0;
+ }
+
+ int rdv_proc_12_msg(void *arg)
+ {
+         int fid = (int) arg;
+         int msg;
+         int count;
+
+         printf(" 2");
+         assert(psend(fid, 3) == 0); /* Depose dans le tampon */
+         printf(" 3");
+         assert((pcount(fid, &count) == 0) && (count == 1));
+         assert(psend(fid, 4) == 0); /* Bloque tampon plein */
+         printf(" 5");
+         assert((pcount(fid, &count) == 0) && (count == 1));
+         assert(preceive(fid, &msg) == 0); /* Retire du tampon */
+         assert(msg == 4);
+         printf(" 6");
+         assert(preceive(fid, &msg) == 0); /* Bloque tampon vide. */
+         assert(msg == 5);
+         printf(" 8");
+         assert((pcount(fid, &count) == 0) && (count == 0));
+         return 0;
+ }
+
+ static int test_12_msg(void *arg){
+   int fid;
+   int pid;
+   int msg;
+   int count;
+
+   (void)arg;
+
+   assert(getprio(getpid()) == 128);
+   assert((fid = pcreate(1)) >= 0);
+   printf("1");
+   pid = start(rdv_proc_12_msg, 4000, 130, "rdv_proc_12_msg", (void *)fid);
+   assert(pid > 0);
+   printf(" 4");
+   assert((pcount(fid, &count) == 0) && (count == 2));
+   assert(preceive(fid, &msg) == 0); /* Retire du tampon et debloque un emetteur. */
+   assert(msg == 3);
+   printf(" 7");
+   assert((pcount(fid, &count) == 0) && (count == -1));
+   assert(psend(fid, 5) == 0); /* Pose dans le tampon. */
+   printf(" 9");
+   assert(psend(fid, 6) == 0); /* Pose dans le tampon. */
+   assert(preceive(fid, &msg) == 0); /* Retire du tampon. */
+   assert(msg == 6);
+   assert(pdelete(fid) == 0);
+   assert(psend(fid, 2) < 0);
+   assert(preceive(fid, &msg) < 0);
+   assert(waitpid(-1, 0) == pid);
+   printf(" 10.\n");
+   return 0;
+ }
 
 /*-----------------*
  *      Test 13
@@ -734,191 +829,285 @@ static int test_12_msg(void *arg){
 /*-----------------*
  *      Test 14
  *-----------------*/
-
- static int psender_14_1(void *arg)
+ static int test_14_sem(void *arg)
  {
-         int fid1 = (int)arg;
-         int fid2;
-         int msg;
-
-         printf(" 2 t14");
-         assert(preceive(fid1, &fid2) == 0);
-         assert(psend(fid1, fid2) == 0);
-         fid2 -= 42;
-         assert(psend(fid1, 1) == 0);
-         assert(psend(fid1, 2) == 0);
-         assert(psend(fid1, 3) == 0);
-
-         assert(psend(fid1, 4) == 0);
-
-         assert(psend(fid1, 5) < 0);
-
-         printf(" 6 t14");
-         assert(psend(fid1, 12) < 0);
-         printf(" 9 t14");
-         assert(psend(fid1, 14) < 0);
-         assert(preceive(fid2, &msg) < 0);
-         printf(" 12 t14");
-         assert(preceive(fid2, &msg) < 0);
-         assert(preceive(fid2, &msg) < 0);
-         return 0;
- }
-
- static int psender_14_2(void *arg)
- {
-         int fid1 = (int)arg;
-         int fid2;
-         int msg;
-
-         printf(" 3 t14");
-         assert(preceive(fid1, &fid2) == 0);
-
-         fid2 -= 42;
-         assert(psend(fid1, 6) < 0);
-
-         printf(" 5 t14");
-         assert(psend(fid1, 7) == 0);
-         assert(psend(fid1, 8) == 0);
-         assert(psend(fid1, 9) == 0);
-         assert(psend(fid1, 10) == 0);
-         assert(psend(fid1, 11) < 0);
-         printf(" 8 t14");
-         assert(psend(fid1, 13) < 0);
-         assert((preceive(fid2, &msg) == 0) && (msg == 15));
-         assert(preceive(fid2, &msg) < 0);
-         printf(" 11 t14");
-         assert(preceive(fid2, &msg) < 0);
-         assert(preceive(fid2, &msg) < 0);
-         return 0;
- }
-
- static int test_14_msg(void *arg)
- {
+         int sem;
          int pid1, pid2;
-         int fid1 = pcreate(3);
-         int fid2 = pcreate(3);
-         int msg;
 
          (void)arg;
 
-         /* Bravo si vous n'etes pas tombe dans le piege. */
-         assert(pcreate(1073741827) < 0);
-
-         printf(" 1 t14");
          assert(getprio(getpid()) == 128);
-         assert(fid1 >= 0);
-         assert(psend(fid1, fid2 + 42) == 0);
-         pid1 = start(psender_14_1, 4000, 131, "psender_14_1", (void *)fid1);
-
-         pid2 = start(psender_14_2, 4000, 130, "psender_14_2", (void *)fid1);
-
-         assert((preceive(fid1, &msg) == 0) && (msg == 1));
-
-         assert(chprio(pid2, 132) == 130);
-         printf(" 4 t14");
-         print_list(fid1);
-
-         print_waiting_send_proc(fid1);
-         print_waiting_receive_proc(fid1);
-         assert(preset(fid1) == 0);
-         print_list(fid1);
-         print_waiting_send_proc(fid1);
-         print_waiting_receive_proc(fid1);
-
-         assert((preceive(fid1, &msg) == 0) && (msg == 7));
-         printf(" 7 t14");
-         print_list(fid1);
-         print_waiting_send_proc(fid1);
-         print_waiting_receive_proc(fid1);
-         assert(pdelete(fid1) == 0);
-
-
-         printf(" 10 t14");
-         assert(psend(fid2, 15) == 0);
-         assert(preset(fid2) == 0);
-         printf(" 13 t14");
-         assert(pdelete(fid2) == 0);
-         assert(pdelete(fid2) < 0);
-         assert(waitpid(pid2, 0) == pid2); //XXX assert(waitpid(-1, 0) == pid2); ???
-         assert(waitpid(-1, 0) == pid1);
-         printf(".\n");
+         assert((sem = screate(0)) >= 0);
+         pid1 = start(proc14_1, 4000, 129, "proc14_1", (void *)sem);
+         assert(pid1 > 0);
+         printf(" 2");
+         pid2 = start(proc14_2, 4000, 130, "proc14_2", (void *)sem);
+         assert(pid2 > 0);
+         printf(" 4");
+         assert(chprio(pid1, 131) == 129);
+         assert(signal(sem) == 0);
+         printf(" 6");
+         assert(chprio(pid1, 127) == 131);
+         assert(signal(sem) == 0);
+         printf(" 8");
+         assert(signaln(sem, 2) == 0);
+         printf(" 10");
+         assert(waitpid(pid1, 0) == pid1);
+         assert(scount(sem) == 0xffff);
+         assert(kill(pid2) == 0);
+         assert(getprio(pid2) < 0);
+         assert(chprio(pid2, 129) < 0);
+         assert(scount(sem) == 0);
+         assert(signal(sem) == 0);
+         assert(scount(sem) == 1);
+         assert(sdelete(sem) == 0);
+         assert(waitpid(-1, 0) == pid2);
+         printf(" 12.\n");
          return 0;
  }
+
+ static int proc14_1(void *arg)
+ {
+         int sem = (int)arg;
+         printf("1");
+         assert(wait(sem) == 0);
+         printf(" 5");
+         assert(wait(sem) == 0);
+         printf(" 11");
+         exit(1);
+ }
+
+ static int proc14_2(void *arg)
+ {
+         int sem = (int)arg;
+         printf(" 3");
+         assert(wait(sem) == 0);
+         printf(" 7");
+         assert(wait(sem) == 0);
+         printf(" 9");
+         assert(wait(sem) == 0);
+         printf(" X");
+         return 2;
+ }
+
+
+  static int psender_14_1(void *arg)
+  {
+          int fid1 = (int)arg;
+          int fid2;
+          int msg;
+
+          printf(" 2 t14");
+          assert(preceive(fid1, &fid2) == 0);
+          assert(psend(fid1, fid2) == 0);
+          fid2 -= 42;
+          assert(psend(fid1, 1) == 0);
+          assert(psend(fid1, 2) == 0);
+          assert(psend(fid1, 3) == 0);
+
+          assert(psend(fid1, 4) == 0);
+
+          assert(psend(fid1, 5) < 0);
+
+          printf(" 6 t14");
+          assert(psend(fid1, 12) < 0);
+          printf(" 9 t14");
+          assert(psend(fid1, 14) < 0);
+          assert(preceive(fid2, &msg) < 0);
+          printf(" 12 t14");
+          assert(preceive(fid2, &msg) < 0);
+          assert(preceive(fid2, &msg) < 0);
+          return 0;
+  }
+
+  static int psender_14_2(void *arg)
+  {
+          int fid1 = (int)arg;
+          int fid2;
+          int msg;
+
+          printf(" 3 t14");
+          assert(preceive(fid1, &fid2) == 0);
+
+          fid2 -= 42;
+          assert(psend(fid1, 6) < 0);
+
+          printf(" 5 t14");
+          assert(psend(fid1, 7) == 0);
+          assert(psend(fid1, 8) == 0);
+          assert(psend(fid1, 9) == 0);
+          assert(psend(fid1, 10) == 0);
+          assert(psend(fid1, 11) < 0);
+          printf(" 8 t14");
+          assert(psend(fid1, 13) < 0);
+          assert((preceive(fid2, &msg) == 0) && (msg == 15));
+          assert(preceive(fid2, &msg) < 0);
+          printf(" 11 t14");
+          assert(preceive(fid2, &msg) < 0);
+          assert(preceive(fid2, &msg) < 0);
+          return 0;
+  }
+
+  static int test_14_msg(void *arg)
+  {
+          int pid1, pid2;
+          int fid1 = pcreate(3);
+          int fid2 = pcreate(3);
+          int msg;
+
+          (void)arg;
+
+          /* Bravo si vous n'etes pas tombe dans le piege. */
+          assert(pcreate(1073741827) < 0);
+
+          printf(" 1 t14");
+          assert(getprio(getpid()) == 128);
+          assert(fid1 >= 0);
+          assert(psend(fid1, fid2 + 42) == 0);
+          pid1 = start(psender_14_1, 4000, 131, "psender_14_1", (void *)fid1);
+
+          pid2 = start(psender_14_2, 4000, 130, "psender_14_2", (void *)fid1);
+
+          assert((preceive(fid1, &msg) == 0) && (msg == 1));
+
+          assert(chprio(pid2, 132) == 130);
+          printf(" 4 t14");
+          print_list(fid1);
+
+          print_waiting_send_proc(fid1);
+          print_waiting_receive_proc(fid1);
+          assert(preset(fid1) == 0);
+          print_list(fid1);
+          print_waiting_send_proc(fid1);
+          print_waiting_receive_proc(fid1);
+
+          assert((preceive(fid1, &msg) == 0) && (msg == 7));
+          printf(" 7 t14");
+          print_list(fid1);
+          print_waiting_send_proc(fid1);
+          print_waiting_receive_proc(fid1);
+          assert(pdelete(fid1) == 0);
+
+
+          printf(" 10 t14");
+          assert(psend(fid2, 15) == 0);
+          assert(preset(fid2) == 0);
+          printf(" 13 t14");
+          assert(pdelete(fid2) == 0);
+          assert(pdelete(fid2) < 0);
+          assert(waitpid(pid2, 0) == pid2); //XXX assert(waitpid(-1, 0) == pid2); ???
+          assert(waitpid(-1, 0) == pid1);
+          printf(".\n");
+          return 0;
+        }
 
 /*-----------------*
  *      Test 15
  *-----------------*/
- /*******************************************************************************
-  * Test 15
-  *
-  * Tuer des processus en attente sur file
-  ******************************************************************************/
-
-  static int psmg_15_1(void *arg)
-  {
-          int fid1 = (int)arg;
-
-          printf(" 2");
-          assert(psend(fid1, 1) == 0);
-          assert(psend(fid1, 2) == 0);
-          assert(psend(fid1, 3) == 0);
-          assert(psend(fid1, 4) == 0);
-          assert(psend(fid1, 5) == 457);
-          return 1;
-  }
-
-  static int psmg_15_2(void *arg)
-  {
-          int fid1 = (int)arg;
-
-          printf(" 3");
-          assert(psend(fid1, 6) == 0);
-          assert(psend(fid1, 7) == 457);
-          return 1;
-  }
-
- static int test_15_msg(void *arg)
+ static int test_15_sem(void *arg)
  {
-         int pid1, pid2, fid1;
-         int msg;
-         int count = 1;
-         int r = 1;
+         int sem, i;
 
          (void)arg;
 
-         assert((fid1 = pcreate(3)) >= 0);
-         printf("1");
-         assert(getprio(getpid()) == 128);
-         pid1 = start(psmg_15_1, 4000, 131, "psmg_15_1", (void *)fid1);
-         assert(pid1 > 0);
-         pid2 = start(psmg_15_2, 4000, 130, "pmsg_15_2", (void *)fid1);
-         assert(pid2 > 0);
-
-         assert((preceive(fid1, &msg) == 0) && (msg == 1));
-         assert(kill(pid1) == 0);
-         assert(kill(pid1) < 0);
-         assert((preceive(fid1, &msg) == 0) && (msg == 2));
-         assert(kill(pid2) == 0);
-         assert(kill(pid2) < 0);
-         assert(preceive(fid1, &msg) == 0);
-         assert(msg == 3);
-         assert(preceive(fid1, &msg) == 0);
-         assert(msg == 4);
-         assert(preceive(fid1, &msg) == 0);
-         assert(msg == 6);
-         assert(pcount(fid1, &count) == 0);
-         assert(count == 0);
-         assert(waitpid(pid1, &r) == pid1);
-         assert(r == 0);
-         r = 1;
-         assert(waitpid(-1, &r) == pid2);
-         assert(r == 0);
-         assert(pdelete(fid1) == 0);
-         assert(pdelete(fid1) < 0);
-         printf(" 4.\n");
+         assert(screate(-2) == -1);
+         assert((sem = screate(2)) >= 0);
+         assert(signaln(sem, -4) < 0);
+         assert(sreset(sem, -3) == -1);
+         assert(scount(sem) == 2);
+         assert(signaln(sem, 32760) == 0);
+         assert(signaln(sem, 6) == -2);
+         assert(scount(sem) == 32762);
+         assert(wait(sem) == 0); // Bloque ici
+         assert(scount(sem) == 32761);
+         assert(signaln(sem, 30000) == -2);
+         assert(scount(sem) == 32761);
+         assert(wait(sem) == 0);
+         assert(scount(sem) == 32760);
+         assert(signaln(sem, -2) < 0);
+         assert(scount(sem) == 32760);
+         assert(wait(sem) == 0);
+         assert(scount(sem) == 32759);
+         assert(signaln(sem, 8) == 0);
+         assert(scount(sem) == 32767);
+         assert(signaln(sem, 1) == -2);
+         assert(scount(sem) == 32767);
+         assert(signal(sem) == -2);
+         assert(scount(sem) == 32767);
+         for (i=0; i<32767; i++) {
+                 assert(wait(sem) == 0);
+         }
+         assert(try_wait(sem) == -3);
+         assert(scount(sem) == 0);
+         assert(sdelete(sem) == 0);
+         printf("ok.\n");
          return 0;
  }
 
+ static int psmg_15_1(void *arg)
+ {
+         int fid1 = (int)arg;
+
+         printf(" 2");
+         assert(psend(fid1, 1) == 0);
+         assert(psend(fid1, 2) == 0);
+         assert(psend(fid1, 3) == 0);
+         assert(psend(fid1, 4) == 0);
+         assert(psend(fid1, 5) == 457);
+         return 1;
+ }
+
+ static int psmg_15_2(void *arg)
+ {
+         int fid1 = (int)arg;
+
+         printf(" 3");
+         assert(psend(fid1, 6) == 0);
+         assert(psend(fid1, 7) == 457);
+         return 1;
+ }
+
+static int test_15_msg(void *arg)
+{
+        int pid1, pid2, fid1;
+        int msg;
+        int count = 1;
+        int r = 1;
+
+        (void)arg;
+
+        assert((fid1 = pcreate(3)) >= 0);
+        printf("1");
+        assert(getprio(getpid()) == 128);
+        pid1 = start(psmg_15_1, 4000, 131, "psmg_15_1", (void *)fid1);
+        assert(pid1 > 0);
+        pid2 = start(psmg_15_2, 4000, 130, "pmsg_15_2", (void *)fid1);
+        assert(pid2 > 0);
+
+        assert((preceive(fid1, &msg) == 0) && (msg == 1));
+        assert(kill(pid1) == 0);
+        assert(kill(pid1) < 0);
+        assert((preceive(fid1, &msg) == 0) && (msg == 2));
+        assert(kill(pid2) == 0);
+        assert(kill(pid2) < 0);
+        assert(preceive(fid1, &msg) == 0);
+        assert(msg == 3);
+        assert(preceive(fid1, &msg) == 0);
+        assert(msg == 4);
+        assert(preceive(fid1, &msg) == 0);
+        assert(msg == 6);
+        assert(pcount(fid1, &count) == 0);
+        assert(count == 0);
+        assert(waitpid(pid1, &r) == pid1);
+        assert(r == 0);
+        r = 1;
+        assert(waitpid(-1, &r) == pid2);
+        assert(r == 0);
+        assert(pdelete(fid1) == 0);
+        assert(pdelete(fid1) < 0);
+        printf(" 4.\n");
+        return 0;
+}
 
 /*-----------------*
  *      Test 16

@@ -32,6 +32,8 @@
  * Types
  ******************************************************************************/
 
+ typedef struct _proc proc;
+
  struct indice_queue_tab {
    int indice;
    int priority;

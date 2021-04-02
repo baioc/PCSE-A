@@ -45,11 +45,29 @@
   Delete a semaphore
   */
   int sdelete(int sem);
+  /*
+  Reset the semaphore list_sem[sem]
+  */
   int sreset(int sem,short int count);
+  /*
+  Do the V operation on semaphore list_sem[sem]
+  */
   int signal(int sem);
+  /*
+  Do the V operation count time on semaphore list_sem[sem]
+  */
   int signaln(int sem,short int count);
+  /*
+  Test the P operation on semaphore list_sem[sem] without blocking it
+  */
   int try_wait(int sem);
+  /*
+  Do the P operation on semaphore list_sem[sem]
+  */
   int wait(int sem);
+  /*
+  Return the value of the semaphore list_sem[sem]
+  */
   int scount(int sem);
  /*******************************************************************************
   * Internal function

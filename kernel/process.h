@@ -15,7 +15,6 @@
 #include "stdint.h"
 #include "stddef.h"
 #include "debug.h"
-#include "kernel_tests.h"
 #include "cpu.h"
 #include "queue.h"
 #include "mem.h"
@@ -24,6 +23,8 @@
 #include "clock.h"
 #include "console.h"
 #include "sem.h"
+#include "kernel_tests.h"
+#include "message-queue.h"
 
 /*******************************************************************************
  * Macros
@@ -82,6 +83,7 @@
    link         children;
    link         siblings;
    link         blocked; // if blocked by a semaphore
+   int          sid; // id of the semaphore blocking it (if BLOCKED)
    int          retval;
    int          m_queue_fid; // fid in which the process if sending/receving messages
    int          m_queue_rd_send; // if blocked on a reseted or deleted message queue while sending
