@@ -80,7 +80,7 @@ enable_paging:
 	/* PG (paging) flag, bit 31 of CR0 : must to be set to active paging */
 	/* Cf. 6.2.1 Intel Architecture Software Developer's Manual Volume 3 */
 	movl	%cr0,%eax
-	orl	$0x80000000,%eax
+	orl	$0x80010001,%eax
 	movl	%eax,%cr0
 
 	/* XXX: this seems like a sanity check to test paging ... or force initial TLB usage (?) */

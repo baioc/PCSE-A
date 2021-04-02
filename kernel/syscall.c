@@ -40,7 +40,7 @@ extern void syscall_handler(void);
  * Variables
  ******************************************************************************/
 
-static void *syscalls[] = {
+static const void *syscalls[] = {
     SYSCALL_ENTRY(console_putbytes),
     SYSCALL_ENTRY(chprio),
     SYSCALL_ENTRY(clock_settings),

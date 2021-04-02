@@ -24,7 +24,7 @@ switch_context:
 	movl 12(%eax), %esi
 	movl 16(%eax), %edi
 	movl 20(%eax), %ecx
-	movl %ecx, %cr3 # flushes the TLB TODO: optim
+	movl %ecx, %cr3 # flushes the TLB
 	movl %ecx, tss+28 # tss+28 : TSS.CR3
 	movl 24(%eax), %ecx
 	movl %ecx, tss+4
@@ -50,7 +50,8 @@ switch_mode_user:
 	pushl $USER_DS # SS
 	pushl %edx     # ESP
 	pushfl         # EFLAGS
-	orl $0x0200, (%esp) # set IF in eflags to get enabled interrupts on iret
+	orl $0x0200, (%esp)      # set IF to get enabled interrupts on iret
+	andl $0xFFFFCFFF, (%esp) # also0 make sure IOPL is set to 0
 	pushl $USER_CS # CS
 	pushl %eax     # EIP
 	# "return" (for the first time) to userspace

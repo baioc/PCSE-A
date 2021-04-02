@@ -485,7 +485,8 @@ CHECK_ALARM:
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
-  switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
+  if (pass != take)
+    switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
 static inline void filiate(struct proc *c, struct proc *p)
@@ -540,8 +541,8 @@ static void destroy(struct proc *proc)
 
 static void idle(void)
 {
-  // TODO: idle must start init
-  const int pid = start("init", 4000, MAXPRIO, (void *)0xAAAAAAAA);
+  // idle must start init
+  const int pid = start("init", 4000, MAXPRIO, NULL);
   assert(pid > 0);
   INIT_PROC = &process_table[pid];
 
