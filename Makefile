@@ -62,5 +62,4 @@ gdb:
 	$(GDB) --tui -f kernel/kernel.bin \
 	       -ex "dir kernel" \
 	       -ex "target remote localhost:1234" \
-	       -ex "break panic" \
 	       -ex "tbreak kernel_start" -ex "continue"

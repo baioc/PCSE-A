@@ -1,30 +1,34 @@
 #include "segment.h"
 
 	.text
-	.globl ctx_sw
-# Stack structure:
-#   %esp + 4 : old process context address
-#   %esp + 8 : new process context address
-ctx_sw:
-	# we don't need to save temp registers since this is a function call
+	.globl switch_context
+# 4(%esp) : old process context address
+# 8(%esp) : new process context address
+switch_context:
+	# we only need to save non-scratch regs
 	movl 4(%esp), %eax
-	movl %ebx, (%eax)
+	movl %ebx, 0(%eax)
 	movl %esp, 4(%eax)
 	movl %ebp, 8(%eax)
 	movl %esi, 12(%eax)
 	movl %edi, 16(%eax)
 	movl %cr3, %ecx
 	movl %ecx, 20(%eax)
-	# load the new process context
+	movl tss+4, %ecx # tss+4 : TSS.ESP0
+	movl %ecx, 24(%eax)
+	# load new process context
 	movl 8(%esp), %eax
-	movl (%eax), %ebx
+	movl 0(%eax), %ebx
 	movl 4(%eax), %esp
 	movl 8(%eax), %ebp
 	movl 12(%eax), %esi
 	movl 16(%eax), %edi
 	movl 20(%eax), %ecx
-	movl %ecx, %cr3
-	# yield kernel execution to the new proc' by returning with the new stack
+	movl %ecx, %cr3 # flushes the TLB TODO: optim
+	movl %ecx, tss+28 # tss+28 : TSS.CR3
+	movl 24(%eax), %ecx
+	movl %ecx, tss+4
+	# yield execution to the next process' by returning with the new stack
 	ret
 
 	.text
@@ -46,12 +50,8 @@ switch_mode_user:
 	pushl $USER_DS # SS
 	pushl %edx     # ESP
 	pushfl         # EFLAGS
-	orl $0x0200, (%esp) # set IF in eflags to re-enable interrupts on iret
+	orl $0x0200, (%esp) # set IF in eflags to get enabled interrupts on iret
 	pushl $USER_CS # CS
 	pushl %eax     # EIP
-	# store kernelspace CR3 in tss and set CR3 to userspace PDBR
-	movl %cr3, %eax
-	movl %eax, tss+28
-	movl %ecx, %cr3 # this flushes the TLB for us
 	# "return" (for the first time) to userspace
 	iret

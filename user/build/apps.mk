@@ -101,7 +101,7 @@ $$($(1)_OUT):
 # Define compilation flags/includes for app targets
 $$($(1)_DEPS): APP_INC := $$($(1)_INC)
 $$($(1)_TARGET): APP_INC := $$($(1)_INC)
-$$($(1)_TARGET): APP_CFLAGS := $$(CFLAGS)
+$$($(1)_TARGET): APP_CFLAGS := $(filter-out -Wall, $(CFLAGS))
 $$($(1)_TARGET): APP_LDFLAGS := $$(LDFLAGS) --oformat=binary -T build/apps.lds
 
 $$($(1)_TARGET): $$(APPS_STD_TARGET) $$($(1)_OBJS) build/apps.mk

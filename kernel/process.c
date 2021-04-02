@@ -38,47 +38,41 @@
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
 // Userspace virtual mappings.
-#define MMAP_USER_START   0x40000000 /* 1 GiB */
-#define MMAP_STACK_BOTTOM 0xBFFFFFFF /* 3 GiB - 1 */
+#define MMAP_USER_START 0x40000000 /* 1 GiB */
+#define MMAP_STACK_END  0xC0000000 /* 3 GiB */
 
 /*******************************************************************************
  * Types
  ******************************************************************************/
 
-// Describe different states of a process
-enum proc_state {
-  DEAD,           // marks a free process slot => free_procs queue
-  ZOMBIE,         // terminated but still in use => no queue, access via parent
-  SLEEPING,       // process is waiting on its alarm => sleeping_procs queue
-  AWAITING_CHILD, // process is waiting for one of its children => no queue
-  READY,          // process waiting for his turn => ready_procs queue
-  ACTIVE,         // process currently running on processor => current_process
-};
-
-// Process execution context IN KERNELSPACE. Must be kept in sync with ctx_sw()
-struct context {
-  uint32_t ebx;
-  uint32_t esp;
-  uint32_t ebp;
-  uint32_t esi;
-  uint32_t edi;
-  uint32_t cr3;
-};
-
 struct proc {
   // current state
-  enum proc_state state;
+  enum {
+    DEAD,     // free process slot => free_procs queue
+    ZOMBIE,   // terminated but still in use => no queue, access via parent
+    SLEEPING, // waiting on its alarm => sleeping_procs queue
+    AWAITING_CHILD, // waiting for child => no queue, access via children
+    READY,          // waiting for his turn with the CPU => ready_procs queue
+    ACTIVE,         // currently running on the processor => current_process
+  } state;
 
   // process identification
   int   pid;
   char *name;
 
-  // execution context
-  struct context ctx; // registers
-  unsigned *     kernel_stack;
+  // Execution context used in switch_context()
+  struct {
+    uint32_t ebx;
+    uint32_t esp;
+    uint32_t ebp;
+    uint32_t esi;
+    uint32_t edi;
+    uint32_t page_dir; // aka CR3
+    uint32_t esp0;
+  } ctx;
 
   // scheduling information
-  int priority; // priority
+  int priority;
   union {
     unsigned long quantum; // remaining cpu time (in ticks) for this proc
     unsigned long alarm;   // timestamp (in ticks) to wake a sleeping process
@@ -93,19 +87,19 @@ struct proc {
   // return value storage
   int retval;
 
-  // paging structures
-  uint32_t *   page_dir;
-  struct page *pages; // physical pages currently owned by this process
+  // dynamically allocated memory
+  uint32_t *   kernel_stack;
+  struct page *pages;
 };
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
-/// Changes context between two processes, see ctx_sw.S
-extern void ctx_sw(struct context *old, struct context *new);
+/// Changes context between two processes, see switch.S
+extern void switch_context(uint32_t *old, uint32_t *new);
 
-/// Forges an interrupt stack and IRETs to userspace, see ctx_sw.S
+/// Forges an interrupt stack and IRETs to userspace, see switch.S
 extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
 
 /// Makes the current process yield the CPU to the scheduler.
@@ -178,6 +172,7 @@ void process_init(void) // only called from kernel space
   *IDLE_PROC =
       (struct proc){.pid = 0, .name = "idle", .priority = 0, .parent = NULL};
   IDLE_PROC->children = (link)LIST_HEAD_INIT(IDLE_PROC->children);
+  IDLE_PROC->ctx.page_dir = (uint32_t)pgdir;
 
   // initialize process lists
   ready_procs = (link)LIST_HEAD_INIT(ready_procs);
@@ -222,13 +217,14 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   // allocate kernel stack
   new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
   if (new_proc->kernel_stack == NULL) return -1;
+  new_proc->ctx.esp0 = (uint32_t)&new_proc->kernel_stack[KERNEL_STACK_SIZE];
 
   // initialize frame list and pagedir (copy kernel's first 64 pgdir entries)
   new_proc->pages = page_alloc();
   if (new_proc->pages == NULL) goto FAIL_FREE_STACK;
   new_proc->pages->next = NULL;
-  new_proc->page_dir = (uint32_t *)(new_proc->pages->frame * PAGE_SIZE);
-  memcpy(new_proc->page_dir, pgdir, 64 * sizeof(pgdir[0]));
+  new_proc->ctx.page_dir = new_proc->pages->frame * PAGE_SIZE;
+  memcpy((uint32_t *)new_proc->ctx.page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
   // map and copy application code into process virtual memory
   const uint32_t app_last = mmap_region(new_proc,
@@ -237,35 +233,32 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
                                         app->start);
   if (app_last == 0) goto FAIL_FREE_PAGES;
 
-  // allocate and map user stack (NOTE: stack bottom === highest stack address)
-  ssize += 2 * sizeof(uint32_t); // adjust stack size based on what we insert
-  uint32_t stack_first = (MMAP_STACK_BOTTOM - ssize) + 1;
+  // allocate and map user stack
+  uint32_t stack_first = MMAP_STACK_END - ssize;
   stack_first -= stack_first % PAGE_SIZE; // round down to page-aligned address
   // we don't use the entire memory space, so data and stack memory really can't
   // bump into each other, but we'll add the check anyway while making sure
   // there's at least one unmapped page between them (to catch stack overflows)
   if (stack_first - PAGE_SIZE <= app_last) goto FAIL_FREE_PAGES;
-  const uint32_t stack_last = mmap_region(
-      new_proc, stack_first, (MMAP_STACK_BOTTOM - stack_first) + 1, NULL);
+  const uint32_t stack_last =
+      mmap_region(new_proc, stack_first, MMAP_STACK_END - stack_first, NULL);
   if (stack_last == 0) goto FAIL_FREE_PAGES;
-  assert(stack_last == MMAP_STACK_BOTTOM);
+  assert(stack_last == MMAP_STACK_END - 1);
 
   // setup initial user stack with the given arg
-  uint32_t *stack_bottom = translate(new_proc->page_dir, MMAP_STACK_BOTTOM);
+  uint32_t *stack_bottom =
+      translate((uint32_t *)new_proc->ctx.page_dir, MMAP_STACK_END - 4);
   assert(stack_bottom != NULL);
   stack_bottom[0] = (uint32_t)arg;
-  stack_bottom[-1] = (uint32_t)NULL;
+  stack_bottom[-1] = (uint32_t)NULL; // acts as padding to get arg in 4(%esp)
 
   // setup kernel stack that moves to userspace on RET
-  new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = (uint32_t)new_proc->page_dir;
-  new_proc->kernel_stack[KERNEL_STACK_SIZE - 2] = MMAP_STACK_BOTTOM - 1;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = new_proc->ctx.page_dir;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 2] = MMAP_STACK_END - 2 * 4;
   new_proc->kernel_stack[KERNEL_STACK_SIZE - 3] = MMAP_USER_START;
   new_proc->kernel_stack[KERNEL_STACK_SIZE - 4] = (uint32_t)NULL;
   new_proc->kernel_stack[KERNEL_STACK_SIZE - 5] = (uint32_t)switch_mode_user;
-  new_proc->ctx = (struct context){
-      .esp = (uint32_t)(&new_proc->kernel_stack[KERNEL_STACK_SIZE - 5]),
-      .cr3 = (uint32_t)new_proc->page_dir,
-  };
+  new_proc->ctx.esp = (uint32_t)&new_proc->kernel_stack[KERNEL_STACK_SIZE - 5];
 
   // initialize children list and filiate itself to parent
   new_proc->children = (link)LIST_HEAD_INIT(new_proc->children);
@@ -492,7 +485,7 @@ CHECK_ALARM:
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
-  ctx_sw(&pass->ctx, &take->ctx);
+  switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
 static inline void filiate(struct proc *c, struct proc *p)
@@ -548,9 +541,9 @@ static void destroy(struct proc *proc)
 static void idle(void)
 {
   // TODO: idle must start init
-  const int pid = start("test_app", 256, 1, NULL);
+  const int pid = start("init", 4000, MAXPRIO, (void *)0xAAAAAAAA);
   assert(pid > 0);
-  (void)pid; // *INIT_PROC = process_table[pid];
+  INIT_PROC = &process_table[pid];
 
   // and then stay idle forever
   sti();
@@ -584,7 +577,7 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     }
 
     // we might need to allocate a page table as well
-    int pde = page_map(proc->page_dir, virt, real, flags);
+    int pde = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
     if (pde >= 0) {
       // fortunately, it fits exactly in a page
       struct page *page_tab = page_alloc();
@@ -593,8 +586,9 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
       proc->pages = page_tab;
 
       // add page directory entry, then try the mapping again (should work now)
-      proc->page_dir[pde] = (page_tab->frame * PAGE_SIZE) | flags;
-      pde = page_map(proc->page_dir, virt, real, flags);
+      ((uint32_t *)proc->ctx.page_dir)[pde] =
+          (page_tab->frame * PAGE_SIZE) | flags;
+      pde = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
       assert(pde < 0);
     }
 
