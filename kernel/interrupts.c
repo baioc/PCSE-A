@@ -46,7 +46,7 @@
 
 void set_interrupt_handler(int num, void (*handler)(void), unsigned char pl)
 {
-  assert(num >= 32); // 0-31 are used by trap gates in processor_structs.c
+  assert(num < 20 || num > 31); // avoid intel-reserved range
   assert((unsigned)num < (sizeof(idt) / sizeof(idt[0])));
   assert(handler != NULL);
   const uint32_t addr = (uint32_t)handler;

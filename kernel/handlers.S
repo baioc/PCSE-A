@@ -78,6 +78,11 @@ FUNCTION##_handler:                                                          \
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
 
+/* this exception pushes an extra error code into the stack, but since we're
+only treating page faults to gracefully terminate a process, we don't need to
+worry about popping the error code before returning: we never return */
+DEFINE_INTERRUPT_HANDLER(page_fault) /* process.c */
+
 
 /* Syscall parameter handler: simply passes reified args to do_syscall() */
 	.text

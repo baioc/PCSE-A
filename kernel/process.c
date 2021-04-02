@@ -20,6 +20,15 @@
 #include "stdbool.h"
 #include "clock.h"
 #include "userspace_apps.h"
+#include "interrupts.h"
+
+/// Changes context between two processes, see switch.S
+extern void switch_context(uint32_t *old, uint32_t *new);
+
+/// Forges an interrupt stack and IRETs to userspace, see switch.S
+extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
+
+extern void page_fault_handler(void);
 
 /*******************************************************************************
  * Macros
@@ -96,12 +105,6 @@ struct proc {
  * Internal function declaration
  ******************************************************************************/
 
-/// Changes context between two processes, see switch.S
-extern void switch_context(uint32_t *old, uint32_t *new);
-
-/// Forges an interrupt stack and IRETs to userspace, see switch.S
-extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
-
 /// Makes the current process yield the CPU to the scheduler.
 static void schedule(void);
 
@@ -166,7 +169,7 @@ static link sleeping_procs;
  * Public function
  ******************************************************************************/
 
-void process_init(void) // only called from kernel space
+void process_init(void)
 {
   // set up initial kernel process "idle"
   *IDLE_PROC =
@@ -184,6 +187,9 @@ void process_init(void) // only called from kernel space
     proc->state = DEAD;
     queue_add(proc, &free_procs, struct proc, node, pid);
   }
+
+  // setup pagefault handller
+  set_interrupt_handler(14, page_fault_handler, PL_KERNEL);
 
   // idle must be the first process to run
   current_process = IDLE_PROC;
@@ -416,6 +422,14 @@ int waitpid(int pid, int *retvalp)
       schedule();
     }
   }
+}
+
+void page_fault(void)
+{
+  printf("[%s%%%i]: Segmentation fault\n",
+         current_process->name,
+         current_process->pid);
+  exit(128 + 14);
 }
 
 /*******************************************************************************

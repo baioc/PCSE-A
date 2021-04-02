@@ -209,9 +209,6 @@ void trap_handler(unsigned trapno, unsigned error_code)
 		dump_registers(trapno, error_code, t);
 		while (1) {
 			char c = inb(0x60);
-
-			if (d) {
-			}
 			/* Scancodes : 1 = ESC, 0x39 = SPACE, 0x20 = 'd' */
 			switch (c) {
 			case 0x39:
