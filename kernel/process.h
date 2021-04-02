@@ -24,6 +24,7 @@
 #include "console.h"
 #include "sem.h"
 #include "kernel_tests.h"
+#include "message-queue.h"
 
 /*******************************************************************************
  * Macros
@@ -51,6 +52,7 @@
    ZOMBIE,         // terminated but still in use
    SLEEPING,       // process is waiting on its alarm
    AWAITING_CHILD, // process is waiting for one of its children
+   AWAITING_IO,    // process is waiting for and input/output
    READY,          // process waiting for his turn
    ACTIVE,         // process currently running on processor
  } proc_state;
@@ -83,11 +85,19 @@
    link         blocked; // if blocked by a semaphore
    int          sid; // id of the semaphore blocking it (if BLOCKED)
    int          retval;
+   int          m_queue_fid; // fid in which the process if sending/receving messages
+   int          m_queue_rd_send; // if blocked on a reseted or deleted message queue while sending
+   int          m_queue_rd_receive; // if blocked on a reseted or deleted message queue while receiving
  };
  typedef struct _proc proc;
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
+ // Process disjoint lists.
+ link free_procs;
+ link sleeping_procs;
+ link ready_procs;
 
 /*******************************************************************************
  * Prototypes
@@ -159,5 +169,7 @@ void sleep(unsigned long ticks);
  * the value it points to will be overwritten with the child's exit code.
  */
 int waitpid(int pid, int *retvalp);
+
+proc* get_current_process();
 
 #endif /* _process_H_ */

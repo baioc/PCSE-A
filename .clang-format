@@ -1,5 +1,3 @@
-UseTab: AlignWithSpaces
-
 AlignTrailingComments: true
 AlignEscapedNewlines: Left
 AlignAfterOpenBracket: Align
