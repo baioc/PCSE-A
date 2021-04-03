@@ -51,7 +51,7 @@ switch_mode_user:
 	pushl %edx     # ESP
 	pushfl         # EFLAGS
 	orl $0x0200, (%esp)      # set IF to get enabled interrupts on iret
-	andl $0xFFFFCFFF, (%esp) # also0 make sure IOPL is set to 0
+	andl $0xFFFFCFFF, (%esp) # also make sure IOPL is set to 0
 	pushl $USER_CS # CS
 	pushl %eax     # EIP
 	# "return" (for the first time) to userspace

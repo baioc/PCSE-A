@@ -85,7 +85,8 @@ void *translate(const uint32_t *pgdir, uint32_t virt);
 
 /**
  * Check whether a userspace memory range [ADDR ... ADDR+SIZE] is valid.
- * Returns false if it definitely isn't safe to use.
+ * Returns false if it definitely isn't safe to use, but note that it could
+ * still lead to page faults, for instance.
  */
 bool access_ok(uint32_t addr, unsigned long size);
 

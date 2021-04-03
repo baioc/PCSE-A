@@ -33,9 +33,7 @@ clean:
 	$(MAKE) clean -C kernel/
 	$(MAKE) clean -C user/
 
-build: kernel/kernel.bin
-
-kernel/kernel.bin: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
+build: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
 	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
 	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE)
 
@@ -44,14 +42,14 @@ kernel/kernel.bin: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
 # "make debug & make gdb" runs Qemu with a connected gdb session
 #
 
-run: kernel/kernel.bin
+run: all
 	$(QEMU) -kernel kernel/kernel.bin
 
-debug: kernel/kernel.bin
+debug: all
 	$(QEMU) -kernel kernel/kernel.bin -gdb tcp::1234 -S
 
 # connects gdb to an already-running qemu process on localhost:1234
-gdb: kernel/kernel.bin
+gdb: all
 	$(GDB) --tui -f kernel/kernel.bin \
 	       -ex "dir kernel" \
 	       -ex "target remote localhost:1234" \
