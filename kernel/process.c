@@ -212,8 +212,12 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 {
   const struct uapps *app = uapp_get(name);
   if (app == NULL) return -1;
-  if (ssize == 0) return -1;
   if (prio < 1 || prio > MAXPRIO) return -1;
+
+  // make sure stack size calculation does not overflow and add padding
+  const unsigned ssize_padding = 2 * sizeof(uint32_t);
+  if (ssize >= MMAP_STACK_END - ssize_padding) return -1;
+  ssize += ssize_padding;
 
   // bail when we can't find a free slot in the process table
   if (queue_empty(&free_procs)) return -1;
@@ -579,6 +583,7 @@ static void idle(void)
   const int pid = start("init", 4000, MAXPRIO, NULL);
   assert(pid > 0);
   INIT_PROC = &process_table[pid];
+  INIT_PROC->priority++; // ensures reaper deamon has the highest priority
 
   // and then stay idle forever
   sti();

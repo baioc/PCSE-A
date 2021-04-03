@@ -78,8 +78,8 @@ FUNCTION##_handler:                                                          \
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
 
-/* these may push an error code into the stack, but since we're only faults to
-gracefully terminate a process, we don't need to worry about popping the error
+/* XXX: these may push an error code into the stack, but since we only handle
+faults to terminate a process, we don't need to worry about popping the error
 code before returning: we never return. handlers defined in process.c */
 DEFINE_INTERRUPT_HANDLER(divide_error)
 DEFINE_INTERRUPT_HANDLER(protection_exception)

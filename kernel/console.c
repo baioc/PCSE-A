@@ -69,12 +69,12 @@ void console_init(void)
   efface_ecran();
 }
 
-/* affiche une chaine de caractères à la position courante du curseur */
-void console_putbytes(const char *s, int len)
+int cons_write(const char *str, long size)
 {
-  for (int i = 0; i < len; i++) {
-    traite_car(s[i], CL_NOIR, CL_CYAN | CL_LIGHT);
+  for (long i = 0; i < size; i++) {
+    traite_car(str[i], CL_NOIR, CL_CYAN | CL_LIGHT);
   }
+  return size;
 }
 
 /*******************************************************************************

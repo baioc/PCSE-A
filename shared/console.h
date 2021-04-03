@@ -1,10 +1,9 @@
 #ifndef __CONSOLE_H__
 #define __CONSOLE_H__
 
-/**
- * This is the function called by printf to send its output to the screen. You
- * have to implement it in the kernel and in the user program.
- */
-void console_putbytes(const char *s, int len);
+#define console_putbytes cons_write /* backward compatibility hack */
+
+/// Prints a SIZE bytes long string starting at STR to the console.
+int cons_write(const char *str, long size);
 
 #endif

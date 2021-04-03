@@ -41,16 +41,16 @@ extern void syscall_handler(void);
  ******************************************************************************/
 
 static const void *syscalls[] = {
-    SYSCALL_ENTRY(console_putbytes),
-    SYSCALL_ENTRY(chprio),
+    SYSCALL_ENTRY(cons_write),
     SYSCALL_ENTRY(clock_settings),
     SYSCALL_ENTRY(current_clock),
+    SYSCALL_ENTRY(wait_clock),
+    SYSCALL_ENTRY(chprio),
     SYSCALL_ENTRY(exit),
     SYSCALL_ENTRY(getpid),
     SYSCALL_ENTRY(getprio),
     SYSCALL_ENTRY(kill),
     SYSCALL_ENTRY(start),
-    SYSCALL_ENTRY(wait_clock),
     SYSCALL_ENTRY(waitpid),
 };
 

@@ -85,7 +85,7 @@ FN:;                      \
 /* Definitions: */
 
 /* console.h */
-DEFN_SYSCALL2(console_putbytes)
+DEFN_SYSCALL2(cons_write)
 
 /* clock.h */
 DEFN_SYSCALL2(clock_settings)

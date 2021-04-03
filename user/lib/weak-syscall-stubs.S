@@ -9,7 +9,7 @@
 
 #define WEAK_STUB(symbol)       .weak symbol; symbol:
 
-WEAK_STUB(cons_write)
+/* TODO: implement missing system subroutines */
 WEAK_STUB(cons_read)
 WEAK_STUB(cons_echo)
 WEAK_STUB(scount)

@@ -89,14 +89,10 @@ enable_paging:
 	jmp	*%eax
 0:	ret
 
-/* Unimplemented functions.
+/* TODO: Unimplemented functions.
 You have to implement them it in ".c" files. As these symbols are marked as
 "weak", they will no more be used as soon as you write your implementations.
 */
-	.weak console_putbytes
-console_putbytes:
-	ret
-
 	.weak keyboard_data
 keyboard_data:
 	ret
