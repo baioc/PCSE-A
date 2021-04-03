@@ -6,6 +6,7 @@
  ******************************************************************************/
 
 #include "stdint.h"
+#include "stdbool.h"
 
 /*******************************************************************************
  * Macros
@@ -19,6 +20,10 @@
 #define PAGE_PRESENT 0x01
 #define PAGE_WRITE   0x02
 #define PAGE_USER    0x04
+
+/// Userspace virtual mappings.
+#define MMAP_USER_START 0x40000000 /* 1 GiB */
+#define MMAP_STACK_END  0xC0000000 /* 3 GiB */
 
 /*******************************************************************************
  * Types
@@ -77,5 +82,11 @@ int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags);
  * the physical address the virtual one would map to (which could also be NULL).
  */
 void *translate(const uint32_t *pgdir, uint32_t virt);
+
+/**
+ * Check whether a userspace memory range [ADDR ... ADDR+SIZE] is valid.
+ * Returns false if it definitely isn't safe to use.
+ */
+bool access_ok(uint32_t addr, unsigned long size);
 
 #endif

@@ -123,3 +123,9 @@ void page_free(struct page *p)
   p->next = g_free_list;
   g_free_list = p;
 }
+
+bool access_ok(uint32_t addr, unsigned long size)
+{
+  return addr >= MMAP_USER_START && addr < MMAP_STACK_END &&
+         size < MMAP_STACK_END && addr < MMAP_STACK_END - size;
+}

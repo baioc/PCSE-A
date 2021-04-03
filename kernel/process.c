@@ -48,10 +48,6 @@ extern void page_fault_handler(void);
 /// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
-// Userspace virtual mappings.
-#define MMAP_USER_START 0x40000000 /* 1 GiB */
-#define MMAP_STACK_END  0xC0000000 /* 3 GiB */
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
