@@ -17,6 +17,7 @@ ifeq ("$(TESTS_DIR)", "")
 endif
 endif
 
+# XXX: we are not using the KERNEL_TEST macro any more
 # Add define for KERNEL_TEST. If KERNEL_TEST is present, kernel tests will be
 # launched right after kernel startup (see start.c for usage of KERNEL_TEST)
 ifeq ($(KERNEL_TEST),1)

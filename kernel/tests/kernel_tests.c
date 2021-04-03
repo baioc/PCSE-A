@@ -11,9 +11,6 @@
 
 #include "kernel_tests.h"
 #include "test_console.h"
-#include "test_clock.h"
-#include "userspace_tests.h"
-#include "cpu.h"
 
 /*******************************************************************************
  * Macros
@@ -34,17 +31,12 @@
 /*******************************************************************************
  * Public function
  ******************************************************************************/
+
 void kernel_run_general_tests()
 {
   test_console();
 }
 
-void kernel_run_process_tests()
-{
-  test_clock();
-  // Run imported tests from user/tests directory
-  run_userspace_tests();
-}
 /*******************************************************************************
  * Internal function
  ******************************************************************************/

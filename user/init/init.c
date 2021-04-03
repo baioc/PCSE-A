@@ -14,6 +14,7 @@ int main(void)
   while (waitpid(-1, &ret) != pid) {
   }
 
+  printf(":: reached target user system\n");
   // TODO: interactive entry point
 
   for (;;) waitpid(-1, NULL);
