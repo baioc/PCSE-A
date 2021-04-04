@@ -100,8 +100,8 @@ static int sys_cons_write(const char *str, long size)
 
 static void sys_clock_settings(unsigned long *quartz, unsigned long *ticks)
 {
-  if (!access_ok((uint32_t)quartz, sizeof(unsigned long) - 1) ||
-      !access_ok((uint32_t)ticks, sizeof(unsigned long) - 1))
+  if (!access_ok((uint32_t)quartz, sizeof(unsigned long)) ||
+      !access_ok((uint32_t)ticks, sizeof(unsigned long)))
   {
     return;
   }
@@ -151,7 +151,7 @@ static int sys_start(const char *name, unsigned long ssize, int prio, void *arg)
 
 static int sys_waitpid(int pid, int *retvalp)
 {
-  if (retvalp != NULL && !access_ok((uint32_t)retvalp, sizeof(int) - 1)) {
+  if (retvalp != NULL && !access_ok((uint32_t)retvalp, sizeof(int))) {
     return -13;
   }
   return waitpid(pid, retvalp);

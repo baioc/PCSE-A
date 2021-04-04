@@ -186,7 +186,7 @@ void process_init(void)
     queue_add(proc, &free_procs, struct proc, node, pid);
   }
 
-  // setup pagefault handller
+  // setup fault handllers
   set_interrupt_handler(0, divide_error_handler, PL_KERNEL);
   set_interrupt_handler(13, protection_exception_handler, PL_KERNEL);
   set_interrupt_handler(14, page_fault_handler, PL_KERNEL);

@@ -84,7 +84,7 @@ int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags);
 void *translate(const uint32_t *pgdir, uint32_t virt);
 
 /**
- * Check whether a userspace memory range [ADDR ... ADDR+SIZE] is valid.
+ * Check whether a userspace memory range [ADDR ... ADDR+SIZE) is valid.
  * Returns false if it definitely isn't safe to use, but note that it could
  * still lead to page faults, for instance.
  */
