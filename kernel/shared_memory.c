@@ -34,7 +34,9 @@
  * Variables
  ******************************************************************************/
 
-hash_t shm_map;
+// Mapping of physical addresses of pages along with the number of processes
+// sharing a page
+hash_t shm_map; // "key" -> (address, process_count)
 
 /*******************************************************************************
  * Public function
@@ -56,12 +58,18 @@ void *shm_create(const char *key)
   // a shared object by that name already exists
   if (hash_isset(&shm_map, (void *)key) != 0) return NULL;
 
-  // size inferred from test 21
-  void *object_addr = mem_alloc(OBJECT_SIZE);
-  // add that memory object in the hash table
-  hash_set(&shm_map, (void *)key, object_addr);
+  // object_info will contain address of shared object along with the number
+  // of processes sharing that object
+  int *object_info = mem_alloc(2*sizeof(int));
 
-  return object_addr;
+  void *object = mem_alloc(OBJECT_SIZE);
+  *object_info = (int)object;
+  *(object_info + 1) = 1;
+
+  // add that memory object in the hash table
+  hash_set(&shm_map, (void *)key, object_info);
+
+  return object;
 }
 
 /*
@@ -70,20 +78,37 @@ void *shm_create(const char *key)
  */
 void *shm_acquire(const char *key)
 {
-  return hash_get(&shm_map, (void *)key, (void *)NULL);
+  int *object_info = hash_get(&shm_map, (void *)key, (void *)NULL);
+  if (object_info == NULL) return NULL;
+
+  void *object = (void *)*object_info;
+
+  // register the new process as sharing this mem object
+  (*(object_info + 1))++;
+
+  return object;
 }
 
 /*
- * Delete a memory object referenced by key in shm_map hash table.
+ * Release the shared memory object for a process
+ * If process_count gets down to zero, delete the memory object referenced
+ * by key in shm_map hash table.
  * If that key doesn't exist in shm_map, does nothing.
  */
 void shm_release(const char *key)
 {
-  void *object_addr = hash_get(&shm_map, (void *)key, (void *)NULL);
-  if (object_addr == NULL) return;
+  int *object_info = hash_get(&shm_map, (void *)key, (void *)NULL);
+  if (object_info == NULL) return;
 
-  mem_free(object_addr, OBJECT_SIZE);
-  assert(hash_del(&shm_map, (void *) key) == 0);
+  void *object = (void *)*object_info;
+
+  // unregister the process
+  (*(object_info + 1))--;
+
+  if (*(object_info + 1) == 0) {
+    mem_free(object, OBJECT_SIZE);
+    assert(hash_del(&shm_map, (void *)key) == 0);
+  }
 }
 
 /*******************************************************************************
