@@ -19,6 +19,7 @@
 #include "test1.h"
 #include "test4.h"
 #include "test13.h"
+#include "test16.h"
 
 /*******************************************************************************
  * Macros
@@ -87,6 +88,11 @@ static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
 
+static int test_16_msg(void *arg);
+static int proc_16_1_msg(void *arg);
+static int proc_16_2_msg(void *arg);
+static int proc_16_3_msg(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -122,11 +128,13 @@ void run_userspace_tests()
   waitpid(pid, NULL);
 
   pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
-    waitpid(pid, NULL);
+  waitpid(pid, NULL);
   pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
-    waitpid(pid, NULL);
+  waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
-    waitpid(pid, NULL);
+  waitpid(pid, NULL);
+  pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
+  waitpid(pid, NULL);
 }
 
 /*******************************************************************************
@@ -1112,8 +1120,110 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 16
  *-----------------*/
-// TODO: Add test_16 when semaphore/message queue and shared memory are
-// available
+
+ static int proc_16_1_msg(void *arg)
+ {
+         struct tst16 *p = NULL;
+         int i, msg;
+
+         (void)arg;
+         p = shm_acquire("test16_shm");
+         assert(p != NULL);
+
+         for (i = 0; i <= p->count; i++) {
+                 assert(preceive(p->fid, &msg) == 0);
+                 assert(msg == i);
+                 test_it();
+         }
+         shm_release("test16_shm");
+         return 0;
+ }
+
+ static int proc_16_2_msg(void *arg)
+ {
+         struct tst16 *p = NULL;
+         int i, msg;
+
+         (void)arg;
+         p = shm_acquire("test16_shm");
+         assert(p != NULL);
+
+         for (i = 0; i < p->count; i++) {
+                 assert(preceive(p->fid, &msg) == 0);
+                 test_it();
+         }
+         shm_release("test16_shm");
+         return 0;
+ }
+
+ static int proc_16_3_msg(void *arg)
+ {
+         struct tst16 *p = NULL;
+         int i;
+
+         (void)arg;
+         p = shm_acquire("test16_shm");
+         assert(p != NULL);
+
+         for (i = 0; i < p->count; i++) {
+                 assert(psend(p->fid, i) == 0);
+                 test_it();
+         }
+         shm_release("test16_shm");
+         return 0;
+ }
+
+ static int test_16_msg(void *arg)
+ {
+         int i, count, fid, pid;
+         struct tst16 *p = NULL;
+         int pids[2 * NB_PROCS];
+
+         (void)arg;
+         p = (struct tst16*) shm_create("test16_shm");
+         assert(p != NULL);
+
+         assert(getprio(getpid()) == 128);
+         for (count = 1; count <= 100; count++) {
+                 fid = pcreate(count);
+                 assert(fid >= 0);
+                 p->count = count;
+                 p->fid = fid;
+                 pid = start(proc_16_1_msg, 2000, 128, "proc16_1_msg", 0);
+                 assert(pid > 0);
+                 for (i=0; i<=count; i++) {
+                         assert(psend(fid, i) == 0);
+                         test_it();
+                 }
+                 assert(waitpid(pid, 0) == pid);
+                 assert(pdelete(fid) == 0);
+         }
+
+         p->count = 20000;
+         fid = pcreate(50);
+         assert(fid >= 0);
+         p->fid = fid;
+         for (i = 0; i< NB_PROCS; i++) {
+                 pid = start(proc_16_2_msg, 2000, 127, "proc16_2_msg", 0);
+                 assert(pid > 0);
+                 pids[i] = pid;
+         }
+         for (i=0; i < NB_PROCS; i++) {
+                 pid = start(proc_16_3_msg, 2000, 127, "proc16_3_msg", 0);
+                 assert(pid > 0);
+                 pids[NB_PROCS + i] = pid;
+         }
+         for (i=0; i < 2 * NB_PROCS; i++) {
+                 assert(waitpid(pids[i], 0) == pids[i]);
+         }
+         assert(pcount(fid, &count) == 0);
+         assert(count == 0);
+         assert(pdelete(fid) == 0);
+
+         shm_release("test16_shm");
+         printf("ok.\n");
+         return 0;
+ }
 
 /*-----------------*
  *      Test 17
