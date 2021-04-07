@@ -119,6 +119,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);*/
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
   waitpid(pid,NULL);
+  pid = start(test_11_sem, 0, 128, "test_11_sem", 0);
+  waitpid(pid,NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
