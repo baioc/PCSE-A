@@ -126,6 +126,8 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   new_proc->pid = new_proc - process_table; // calculate index from pointer
   new_proc->priority = prio;
 
+  new_proc->next_sending_message = -1;
+  new_proc->next_receiving_message = 0;
   new_proc->m_queue_fid = -1;
   new_proc->m_queue_rd_send = 0;
   new_proc->m_queue_rd_receive = 0;
