@@ -62,6 +62,10 @@ static int                suicide(void *arg);
 static unsigned long long div64(unsigned long long x, unsigned long long div,
                                 unsigned long long *rem);*/
 
+static void write_test_10(int fid, const char *buf, unsigned long len);
+static void read_test_10(int fid, char *buf, unsigned long len);
+static int test_10_msg(void *arg);
+
 static int test_12_msg(void *arg);
 static int rdv_proc_12_msg(void *arg);
 
@@ -93,6 +97,9 @@ static int proc_16_1_msg(void *arg);
 static int proc_16_2_msg(void *arg);
 static int proc_16_3_msg(void *arg);
 
+/*static int proc_return(void *arg);
+static int test_17_msg(void *arg);*/
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -118,6 +125,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   /*pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);*/
+  pid = start(test_10_msg, 0, 128, "test_10_msg", 0);
+  waitpid(pid, NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_13_msg, 0, 128, "test_13_msg", 0);
@@ -135,6 +144,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
+  /*pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
+  waitpid(pid, NULL);*/
 }
 
 /*******************************************************************************
@@ -568,12 +579,48 @@ static int waiter(void *arg)
 /*-----------------*
  *      Test 10
  *-----------------*/
-// TODO: Add test_10 when semaphore/message queue are available
+ static void write_test_10(int fid, const char *buf, unsigned long len)
+ {
+         unsigned long i;
+         for (i=0; i<len; i++) {
+                 assert(psend(fid, buf[i]) == 0);
+         }
+ }
+
+ static void read_test_10(int fid, char *buf, unsigned long len)
+ {
+         unsigned long i;
+         for (i=0; i<len; i++) {
+                 int msg;
+                 assert(preceive(fid, &msg) == 0);
+                 buf[i] = (char)msg;
+         }
+ }
+ static int test_10_msg(void *arg)
+ {
+         int fid;
+         const char *str = "abcde";
+         unsigned long len = strlen(str);
+         char buf[10];
+
+         (void)arg;
+
+         printf("1");
+         assert((fid = pcreate(5)) >= 0);
+         write_test_10(fid, str, len);
+         printf(" 2");
+         read_test_10(fid, buf, len);
+         buf[len] = 0;
+         assert(strcmp(str, buf) == 0);
+         assert(pdelete(fid) == 0);
+         printf(" 3.\n");
+         return 0;
+ }
 
 /*-----------------*
  *      Test 11
  *-----------------*/
-// TODO: Add test_11 when semaphore and shared memory are available
+
 
 /*-----------------*
  *      Test 12
@@ -1289,6 +1336,7 @@ static int test_15_msg(void *arg)
                  ids[nx++] = fid;
                  test_it();
          }
+         printf("%i, %i \n", nx, n);
          assert(nx < n);
          for (i=0; i<nx; i++) {
                  assert(pdelete(ids[i]) == 0);
@@ -1300,7 +1348,7 @@ static int test_15_msg(void *arg)
          assert(prio == 128);
          n = 0;
          while (1) {
-                 int pid = start("no_run", 2000, 127, 0);
+                 int pid = start(no_run, 2000, 127, "no_run", 0);
                  if (pid < 0) break;
                  ids[n++] = pid;
                  if (n == l) {
@@ -1326,6 +1374,7 @@ static int test_15_msg(void *arg)
                  test_it();
          }
          printf(", %d.\n", n);
+         return 0;
  }*/
 
 /*-----------------*
