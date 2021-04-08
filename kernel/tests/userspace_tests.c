@@ -62,6 +62,11 @@ static int test_5(void *arg);
 static int no_run(void *arg);
 static int waiter(void *arg);
 
+static int test_7(void *arg);
+static int sleep_pr1(void *arg);
+static int timer(void *arg);
+static int timer1(void *arg);
+
 static int                test_8(void *arg);
 static int                suicide_launcher(void *arg);
 static int                suicide(void *arg);
@@ -111,6 +116,8 @@ void run_userspace_tests()
   pid = start(test_4, 0, 128, "test_4", 0);
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
+  waitpid(pid, NULL);
+  pid = start(test_7, 0, 128, "test_7", 0);
   waitpid(pid, NULL);
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
@@ -354,7 +361,7 @@ static int busy1(void *arg)
     for (i = 0; i < loop_count1; i++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   return 0;
@@ -372,7 +379,7 @@ int busy2(void *arg)
     for (k = 0; k < loop_count1; k++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   i = chprio((int)arg, 16);
@@ -448,11 +455,105 @@ static int waiter(void *arg)
  *      Test 6
  *-----------------*/
 // TODO: Find a way to add test_6
+// NOTE: test_6 assumes we make use of ssize parameter in function start.
+// Irrelevant as we don't currently use that parameter
 
 /*-----------------*
  *      Test 7
  *-----------------*/
-// TODO: Add test_7 when shared memory is available (shm_{create/delete} needed)
+static int test_7(void *arg)
+{
+  int                     pid1, pid2, r;
+  unsigned long           c0, c, quartz, ticks, dur;
+  volatile unsigned long *timer_test_7 = NULL;
+
+  (void)arg;
+  timer_test_7 = shm_create("test7_shm");
+  assert(timer_test_7 != NULL);
+
+  assert(getprio(getpid()) == 128);
+  printf("1");
+  pid1 = start(timer1, 4000, 129, "timer1", 0);
+  assert(pid1 > 0);
+  printf(" 3");
+  assert(waitpid(-1, 0) == pid1);
+  printf(" 8 : ");
+
+  *timer_test_7 = 0;
+  pid1 = start(timer, 4000, 127, "timer", 0);
+  pid2 = start(timer, 4000, 127, "timer", 0);
+  assert(pid1 > 0);
+  assert(pid2 > 0);
+  clock_settings(&quartz, &ticks);
+  dur = 2 * quartz / ticks;
+  test_it();
+  c0 = current_clock();
+  do {
+    test_it();
+    c = current_clock();
+  } while (c == c0);
+  wait_clock(c + dur);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, 0) == pid1);
+  assert(kill(pid2) == 0);
+  assert(waitpid(pid2, 0) == pid2);
+  printf(
+      "%lu changements de contexte sur %lu tops d'horloge", *timer_test_7, dur);
+  pid1 = start(sleep_pr1, 4000, 192, "sleep_pr1", 0);
+  assert(pid1 > 0);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, &r) == pid1);
+  assert(r == 0);
+  printf(".\n");
+  shm_release("test7_shm");
+
+  return 0;
+}
+
+static int sleep_pr1(void *arg)
+{
+  (void)arg;
+  wait_clock(current_clock() + 2);
+  printf(" not killed !!!");
+  assert(0);
+  return 1;
+}
+
+static int timer(void *arg)
+{
+  volatile unsigned long *timer = NULL;
+  timer = shm_acquire("test7_shm");
+  assert(timer != NULL);
+
+  (void)arg;
+  while (1) {
+    unsigned long t = *timer + 1;
+    *timer = t;
+    while (*timer == t) test_it();
+  }
+  while (1)
+    ;
+  return 0;
+}
+
+static int timer1(void *arg)
+{
+  (void)arg;
+
+  unsigned long quartz;
+  unsigned long ticks;
+  unsigned long dur;
+  int           i;
+
+  clock_settings(&quartz, &ticks);
+  dur = (quartz + ticks) / ticks;
+  printf(" 2");
+  for (i = 4; i < 8; i++) {
+    wait_clock(current_clock() + dur);
+    printf(" %d", i);
+  }
+  return 0;
+}
 
 /*-----------------*
  *      Test 8
