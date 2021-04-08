@@ -111,6 +111,10 @@ static void zombify(struct proc *proc, int retval);
  */
 static void destroy(struct proc *proc);
 
+static int run_simple_processes();
+
+static int run_test_processes(void *arg);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -499,26 +503,8 @@ static int init(void *arg)
 {
   (void)arg;
 
-#ifdef KERNEL_TEST
-  printf("---KERNEL TESTS---\n");
-  kernel_run_process_tests();
-  // wait for all tests (child) to end
-  while (waitpid(-1, NULL) != -1)
-    ;
-  printf("---END OF KERNEL TESTS---\n");
-#endif
-
-  printf("Hello world\n");
+  start(run_test_processes, 512, 100, "run_process_test", NULL);
   start(wall_clock_daemon, 512, 5, "clock", NULL);
-  int pids[] = {
-      start(p1, 1024, 2, "P1", "."),
-      start(p2, 1024, 2, "P2", "-"),
-      start(p3, 1024, 2, "P3", "+"),
-      start(p4, 1024, 2, "P4", "*"),
-  };
-  wait_clock(MS_TO_TICKS(31 * 1000));
-  for (int i = 0; i < 4; ++i) kill(pids[i]);
-  printf("\nThe answer still is %d\n", 42);
 
   // reaper daemon makes sure zombie children are properly killed
   for (;;) waitpid(-1, NULL);
@@ -582,4 +568,33 @@ static int p4(void *arg)
     wait_clock(MS_TO_TICKS(10 * 1000));
   }
   return 4;
+}
+
+static int run_simple_processes()
+{
+  printf("Hello world\n");
+  int pids[] = {
+      start(p1, 1024, 2, "P1", "."),
+      start(p2, 1024, 2, "P2", "-"),
+      start(p3, 1024, 2, "P3", "+"),
+      start(p4, 1024, 2, "P4", "*"),
+  };
+  wait_clock(MS_TO_TICKS(31 * 1000));
+  for (int i = 0; i < 4; ++i) kill(pids[i]);
+  printf("\nThe answer still is %d\n", 42);
+
+  return 0;
+}
+
+static int run_test_processes(void *arg)
+{
+  (void)arg;
+#ifdef KERNEL_TEST
+  printf("---KERNEL TESTS---\n");
+  kernel_run_process_tests();
+  printf("---END OF KERNEL TESTS---\n");
+#endif
+  run_simple_processes();
+
+  return 0;
 }
