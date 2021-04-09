@@ -84,6 +84,8 @@
    link         siblings;
    link         blocked; // if blocked by a semaphore
    int          sid; // id of the semaphore blocking it (if BLOCKED)
+   int          sjustreset; // = 1 if it sem just reseted
+   int          sjustdelete; // = 1 if it sem just deleted
    int          retval;
    int          m_queue_fid; // fid in which the process if sending/receving messages
    int          m_queue_rd_send; // if blocked on a reseted or deleted message queue while sending

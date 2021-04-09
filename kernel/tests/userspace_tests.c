@@ -976,7 +976,7 @@ static int waiter(void *arg)
          assert(sreset(sem, 1) == 0);
          printf(" 10");
          assert(chprio(getpid(), 126) == 128);
-         assert(chprio(getpid(), 128) == 126); //Plante ici
+         assert(chprio(getpid(), 128) == 126);
          assert(sdelete(sem) == 0);
          printf(" 14");
          assert(waitpid(pid1, &ret) == pid1);
@@ -986,7 +986,7 @@ static int waiter(void *arg)
          assert(waitpid(-1, &ret) == pid2);
          assert(ret == 2);
          assert(signal(sem) == -1);
-         assert(scount(sem) == -1);
+         assert(scount(sem) == -1); //Plante ici
          assert(sdelete(sem) == -1);
          printf(" 16.\n");
          return 0;

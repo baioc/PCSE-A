@@ -60,6 +60,7 @@
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
       p = queue_out(&(list_sem[sem].list_blocked), proc, blocked);
       p->state = READY;
+      p->sjustdelete = 1;
       queue_add(p, &ready_procs, proc, node, priority);
     }
     list_sem[sem].sid = -1;
@@ -116,9 +117,11 @@
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
       p = queue_out(&(list_sem[sem].list_blocked), proc, blocked);
       p->state = READY;
+      p->sjustreset = 1;
       queue_add(p, &ready_procs, proc, node, priority);
     }
     list_sem[sem].count = count;
+    schedule();
     return 0;
   }
 
@@ -137,16 +140,19 @@
   Do the P operation on semaphore list_sem[sem]
   */
   int wait(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
     if((short int)(list_sem[sem].count - 1) > list_sem[sem].count) return -2;
-    if(list_sem[sem].sid != sem) return -3;
     list_sem[sem].count -= 1;
     if(list_sem[sem].count < 0){
       current_process->state = BLOCKED;
       current_process->sid = sem;
+      current_process->sjustreset = 0;
+      current_process->sjustdelete = 0;
       queue_add(current_process, &(list_sem[sem].list_blocked), proc,
                                                             blocked, priority);
       schedule();
+      if(current_process->sjustdelete == 1) return -3; // After a sdelete
+      if(current_process->sjustreset == 1) return -4; // After a sreset
     }
     return 0;
   }
