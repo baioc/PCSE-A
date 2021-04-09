@@ -18,6 +18,9 @@
  * Macros
  ******************************************************************************/
 
+/// Interrupt number offset that was setup in processor_structs.c:setup_pic.
+#define INTR_VECTOR_OFFSET 0x20
+
 /// Privilege levels.
 #define PL_KERNEL 0
 #define PL_USER   3

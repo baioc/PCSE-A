@@ -1,5 +1,6 @@
 #include "start.h"
 
+#include "kbd.h"
 #include "mem.h"
 #include "userspace_apps.h"
 #include "kernel_tests.h"
@@ -22,6 +23,9 @@ void kernel_start(void)
 {
   console_init();
   printf(":: reached kernel start \n");
+
+  printf(":: initializing PS/2 driver\n");
+  kbd_init();
 
   printf(":: running kernel tests\n");
   kernel_run_general_tests();

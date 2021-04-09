@@ -63,7 +63,7 @@ void clock_init(void)
   g_jiffies = 0;
 
   // setup intr handler and unmask IRQ
-  set_interrupt_handler(32, clock_tick_handler, PL_KERNEL);
+  set_interrupt_handler(INTR_VECTOR_OFFSET + 0, clock_tick_handler, PL_KERNEL);
   mask_irq(0, false);
 }
 
