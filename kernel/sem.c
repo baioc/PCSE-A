@@ -161,7 +161,7 @@
   Return the value of the semaphore list_sem[sem]
   */
   int scount(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
     return (int)(list_sem[sem].count) & 0x0000ffff;
   }
  /*******************************************************************************

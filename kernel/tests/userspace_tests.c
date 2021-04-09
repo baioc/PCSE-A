@@ -986,7 +986,7 @@ static int waiter(void *arg)
          assert(waitpid(-1, &ret) == pid2);
          assert(ret == 2);
          assert(signal(sem) == -1);
-         assert(scount(sem) == -1); //Plante ici
+         assert(scount(sem) == -1);
          assert(sdelete(sem) == -1);
          printf(" 16.\n");
          return 0;
@@ -1228,7 +1228,7 @@ static int waiter(void *arg)
          assert(signaln(sem, 32760) == 0);
          assert(signaln(sem, 6) == -2);
          assert(scount(sem) == 32762);
-         assert(wait(sem) == 0); // Bloque ici
+         assert(wait(sem) == 0);
          assert(scount(sem) == 32761);
          assert(signaln(sem, 30000) == -2);
          assert(scount(sem) == 32761);
