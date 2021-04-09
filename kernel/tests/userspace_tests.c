@@ -97,8 +97,8 @@ static int proc_16_1_msg(void *arg);
 static int proc_16_2_msg(void *arg);
 static int proc_16_3_msg(void *arg);
 
-/*static int proc_return(void *arg);
-static int test_17_msg(void *arg);*/
+static int proc_return(void *arg);
+static int test_17_msg(void *arg);
 
 /*******************************************************************************
  * Variables
@@ -144,8 +144,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
-  waitpid(pid, NULL);*/
+  pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
+  waitpid(pid, NULL);
 }
 
 /*******************************************************************************
@@ -1266,7 +1266,7 @@ static int test_15_msg(void *arg)
  *      Test 17
  *-----------------*/
 
- /*static int ids[1200];
+ static int ids[1200];
 
  static const int heap_len = 64 << 20;
 
@@ -1336,7 +1336,6 @@ static int test_15_msg(void *arg)
                  ids[nx++] = fid;
                  test_it();
          }
-         printf("%i, %i \n", nx, n);
          assert(nx < n);
          for (i=0; i<nx; i++) {
                  assert(pdelete(ids[i]) == 0);
@@ -1375,7 +1374,7 @@ static int test_15_msg(void *arg)
          }
          printf(", %d.\n", n);
          return 0;
- }*/
+ }
 
 /*-----------------*
  *      Test 18

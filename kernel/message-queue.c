@@ -87,7 +87,16 @@ void remove_waiting_processes(int fid, int value);
 
    // we initialize the new message queue
    queue_tab[fid] = mem_alloc(sizeof(struct message_queue));
+   if(queue_tab[fid] == NULL){
+     return -1;
+   }
+
    queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*count);
+   if(queue_tab[fid]->m_queue == NULL){
+     mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
+     return -1;
+   }
+   
    queue_tab[fid]->lenght = count;
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
@@ -186,7 +195,7 @@ void remove_waiting_processes(int fid, int value);
        return 0;
      }
    }
-   
+
    // else we get the message and return 0
    else {
      receiving_message(fid, message);

@@ -24,7 +24,7 @@
  ******************************************************************************/
 
  // Total number of message queues
- #define NBQUEUE 10
+ #define NBQUEUE 200
 
 // Maximum size of the memory
  #define MAXMEMSIZE 0xF424000
