@@ -63,15 +63,19 @@ void remove_waiting_processes(int fid, int value);
  * Public function
  ******************************************************************************/
 
- void init_indice_gestion_list(){
+ int init_indice_gestion_list(){
    indice_unused_gestion = (link)LIST_HEAD_INIT(indice_unused_gestion);
    indice_used_gestion = (link)LIST_HEAD_INIT(indice_used_gestion);
    for (int i = 0; i < NBQUEUE; ++i){
      struct indice_queue_tab* indice_list = mem_alloc(sizeof(struct indice_queue_tab));
+     if(indice_list == NULL){
+       return -1;
+     }
      indice_list->indice = i;
      indice_list->priority = NBQUEUE - 1 - i;
      MQUEUE_UNUSED_ID_ADD(indice_list);
    }
+   return 0;
  }
 
 
@@ -96,7 +100,7 @@ void remove_waiting_processes(int fid, int value);
      mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
      return -1;
    }
-   
+
    queue_tab[fid]->lenght = count;
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
@@ -244,6 +248,10 @@ void remove_waiting_processes(int fid, int value);
    // we reset all the attributes of the message queue fid
    mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght * sizeof(int));
    queue_tab[fid]->m_queue = mem_alloc(sizeof(int)*queue_tab[fid]->lenght);
+   if(queue_tab[fid]->m_queue == NULL){
+     mem_free(queue_tab[fid]->m_queue, queue_tab[fid]->lenght*sizeof(int));
+     return -1;
+   }
    queue_tab[fid]->id_send = -1;
    queue_tab[fid]->nb_send = 0;
    queue_tab[fid]->id_received = -1;

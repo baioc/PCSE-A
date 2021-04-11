@@ -65,7 +65,7 @@
  ******************************************************************************/
 
  // initializes the gestion of indexes required by message queues
- void init_indice_gestion_list();
+ int init_indice_gestion_list();
 
  /*
   * Creates a message queue
