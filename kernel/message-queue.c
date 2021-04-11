@@ -55,6 +55,8 @@ void remove_waiting_processes(int fid, int value);
  * Variables
  ******************************************************************************/
 
+struct message_queue* queue_tab[NBQUEUE];
+
  static link indice_unused_gestion;
 
  static link indice_used_gestion;

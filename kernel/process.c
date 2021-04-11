@@ -71,6 +71,10 @@ proc *current_process = NULL;
 
 // Semaphore list
 extern semaph list_sem[MAXNBR_SEM];
+link free_procs;
+link sleeping_procs;
+link ready_procs;
+
 /*******************************************************************************
  * Public function
  ******************************************************************************/

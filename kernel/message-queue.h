@@ -58,7 +58,7 @@
  ******************************************************************************/
 
  // Tab of message queue
- struct message_queue* queue_tab[NBQUEUE];
+extern struct message_queue* queue_tab[NBQUEUE];
 
 /*******************************************************************************
  * Prototypes

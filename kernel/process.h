@@ -99,9 +99,9 @@
  ******************************************************************************/
 
  // Process disjoint lists.
- link free_procs;
- link sleeping_procs;
- link ready_procs;
+extern link free_procs;
+extern link sleeping_procs;
+extern link ready_procs;
 
 /*******************************************************************************
  * Prototypes
