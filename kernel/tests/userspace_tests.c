@@ -10,16 +10,23 @@
  ******************************************************************************/
 
 #include "userspace_tests.h"
+
+#include "debug.h"
+#include "stddef.h"
+#include "string.h"
+#include "stdlib.h"
+
 #include "process.h"
 #include "message-queue.h"
-#include "debug.h"
 #include "shared_memory.h"
+#include "clock.h"
 #include "sem.h"
 
 #include "test1.h"
 #include "test4.h"
 #include "test13.h"
 #include "test16.h"
+#include "test21.h"
 
 /*******************************************************************************
  * Macros
@@ -56,11 +63,16 @@ static int test_5(void *arg);
 static int no_run(void *arg);
 static int waiter(void *arg);
 
-/*static int                test_8(void *arg);
+static int test_7(void *arg);
+static int sleep_pr1(void *arg);
+static int timer(void *arg);
+static int timer1(void *arg);
+
+static int                test_8(void *arg);
 static int                suicide_launcher(void *arg);
 static int                suicide(void *arg);
 static unsigned long long div64(unsigned long long x, unsigned long long div,
-                                unsigned long long *rem);*/
+                                unsigned long long *rem);
 
 static void write_test_10(int fid, const char *buf, unsigned long len);
 static void read_test_10(int fid, char *buf, unsigned long len);
@@ -100,9 +112,12 @@ static int proc_16_3_msg(void *arg);
 static int proc_return(void *arg);
 static int test_17_msg(void *arg);
 
+static int test_21(void *arg);
+static int shm_checker(void *arg);
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
 
 /*******************************************************************************
  * Public function
@@ -111,6 +126,7 @@ static int test_17_msg(void *arg);
 void run_userspace_tests()
 {
   int pid;
+
   pid = start(test_0, 0, 128, "test_0", 0);
   waitpid(pid, NULL);
   pid = start(test_1, 0, 128, "test_1", 0);
@@ -123,8 +139,10 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_8, 0, 128, "test_8", 0);
-  waitpid(pid, NULL);*/
+  pid = start(test_7, 0, 128, "test_7", 0);
+  waitpid(pid, NULL);
+  pid = start(test_8, 0, 128, "test_8", 0);
+  waitpid(pid, NULL);
   pid = start(test_10_msg, 0, 128, "test_10_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
@@ -145,6 +163,8 @@ void run_userspace_tests()
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
+  waitpid(pid, NULL);
+  pid = start(test_21, 0, 128, "test_21", 0);
   waitpid(pid, NULL);
 }
 
@@ -384,7 +404,7 @@ static int busy1(void *arg)
     for (i = 0; i < loop_count1; i++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   return 0;
@@ -402,7 +422,7 @@ int busy2(void *arg)
     for (k = 0; k < loop_count1; k++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   i = chprio((int)arg, 16);
@@ -478,28 +498,122 @@ static int waiter(void *arg)
  *      Test 6
  *-----------------*/
 // TODO: Find a way to add test_6
+// NOTE: test_6 assumes we make use of ssize parameter in function start.
+// Irrelevant as we don't currently use that parameter
 
 /*-----------------*
  *      Test 7
  *-----------------*/
-// TODO: Add test_7 when shared memory is available (shm_{create/delete} needed)
+static int test_7(void *arg)
+{
+  int                     pid1, pid2, r;
+  unsigned long           c0, c, quartz, ticks, dur;
+  volatile unsigned long *timer_test_7 = NULL;
+
+  (void)arg;
+  timer_test_7 = shm_create("test7_shm");
+  assert(timer_test_7 != NULL);
+
+  assert(getprio(getpid()) == 128);
+  printf("1");
+  pid1 = start(timer1, 4000, 129, "timer1", 0);
+  assert(pid1 > 0);
+  printf(" 3");
+  assert(waitpid(-1, 0) == pid1);
+  printf(" 8 : ");
+
+  *timer_test_7 = 0;
+  pid1 = start(timer, 4000, 127, "timer", 0);
+  pid2 = start(timer, 4000, 127, "timer", 0);
+  assert(pid1 > 0);
+  assert(pid2 > 0);
+  clock_settings(&quartz, &ticks);
+  dur = 2 * quartz / ticks;
+  test_it();
+  c0 = current_clock();
+  do {
+    test_it();
+    c = current_clock();
+  } while (c == c0);
+  wait_clock(c + dur);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, 0) == pid1);
+  assert(kill(pid2) == 0);
+  assert(waitpid(pid2, 0) == pid2);
+  printf(
+      "%lu changements de contexte sur %lu tops d'horloge", *timer_test_7, dur);
+  pid1 = start(sleep_pr1, 4000, 192, "sleep_pr1", 0);
+  assert(pid1 > 0);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, &r) == pid1);
+  assert(r == 0);
+  printf(".\n");
+  shm_release("test7_shm");
+
+  return 0;
+}
+
+static int sleep_pr1(void *arg)
+{
+  (void)arg;
+  wait_clock(current_clock() + 2);
+  printf(" not killed !!!");
+  assert(0);
+  return 1;
+}
+
+static int timer(void *arg)
+{
+  volatile unsigned long *timer = NULL;
+  timer = shm_acquire("test7_shm");
+  assert(timer != NULL);
+
+  (void)arg;
+  while (1) {
+    unsigned long t = *timer + 1;
+    *timer = t;
+    while (*timer == t) test_it();
+  }
+  while (1)
+    ;
+  return 0;
+}
+
+static int timer1(void *arg)
+{
+  (void)arg;
+
+  unsigned long quartz;
+  unsigned long ticks;
+  unsigned long dur;
+  int           i;
+
+  clock_settings(&quartz, &ticks);
+  dur = (quartz + ticks) / ticks;
+  printf(" 2");
+  for (i = 4; i < 8; i++) {
+    wait_clock(current_clock() + dur);
+    printf(" %d", i);
+  }
+  return 0;
+}
 
 /*-----------------*
  *      Test 8
  *-----------------*/
- /*static int test_8(void *arg)
+ static int test_8(void *arg)
  {
    unsigned long long tsc1;
    unsigned long long tsc2;
    int                i, r, pid, count;
 
    (void)arg;
-   assert(getprio(getpid()) == 128);*/
+   assert(getprio(getpid()) == 128);
 
    /* Le petit-fils va passer zombie avant le fils mais ne pas
       etre attendu par waitpid. Un nettoyage automatique doit etre
       fait. */
-   /*pid = start(suicide_launcher, 4000, 129, "suicide_launcher", 0);
+   pid = start(suicide_launcher, 4000, 129, "suicide_launcher", 0);
    assert(pid > 0);
    assert(waitpid(pid, &r) == pid);
    assert(chprio(r, 192) < 0);
@@ -569,12 +683,12 @@ static int waiter(void *arg)
      q += mul;
      x -= div;
    }
- }*/
+ }
 
 /*-----------------*
  *      Test 9
  *-----------------*/
-// TODO: Add test_9 when shared memory is available (shm_{create/delete} needed)
+// NOTE: test_9 removed as it was not relevant on kernel side (no interrupts)
 
 /*-----------------*
  *      Test 10
@@ -1394,9 +1508,87 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 21
  *-----------------*/
-// TODO: Add test_21 when shared memory is available
+static int test_21(void *arg)
+{
+  (void)arg;
+  char *shared_area = NULL;
+  int   checker_pid = -1;
+  int   checker_ret = -1;
+
+  printf("\n%s\n", "Test 21: checking shared memory space ...");
+
+  shared_area = shm_create("test21-shm");
+  assert(shared_area != NULL);
+
+  /* We have to be able to fill at least 1 page */
+  memset(shared_area, FILL_VALUE, 4096);
+
+  /* Let the check do its job */
+  checker_pid =
+      start(shm_checker, 4000, getprio(getpid()) - 1, "shm_checker", NULL);
+  assert(checker_pid > 0);
+
+  waitpid(checker_pid, &checker_ret);
+
+  switch (checker_ret) {
+  case CHECKER_SUCCESS:
+    printf(
+        " -> %s\n -> %s\n", "\"shm_checker\" ends correctly.", "TEST PASSED");
+    break;
+  case 0:
+    printf(" -> %s\n -> %s\n", "\"shm_checker\" killed.", "TEST FAILED");
+    break;
+  default:
+    printf(" -> %s\n -> %s\n",
+           "\"shm_checker\" returned inconsistent value. Check waitpid "
+           "implementation.",
+           "TEST FAILED");
+  }
+
+  int shm_valid = 1;
+  for (int i = 0; i < 4096; i++) {
+    if (shared_area[i] != 0) {
+      shm_valid = 0;
+    }
+  }
+
+  if (shm_valid) {
+    printf(" -> %s\n -> %s\n", "shm area content is correct.", "TEST PASSED");
+  } else {
+    printf(" -> %s\n -> %s\n", "shm area content is invalid.", "TEST FAILED");
+  }
+
+  shm_release("test21-shm");
+  return 0;
+}
+
+static int shm_checker(void *arg)
+{
+  (void)arg;
+  char *shared_area = NULL;
+
+  shared_area = shm_acquire("test21-shm");
+  assert(shared_area != NULL);
+
+  /* Check we get the memory filled by the main process */
+  for (int i = 0; i < 4096; i++) {
+    if (shared_area[i] != (char)FILL_VALUE) {
+      return -1;
+    }
+  }
+
+  /*
+   * Fill it with something else to let the main process check we success
+   * to access it.
+   */
+  memset(shared_area, 0, 4096);
+
+  return (int)CHECKER_SUCCESS;
+}
 
 /*-----------------*
  *      Test 22
  *-----------------*/
 // TODO: Add test_22 when shared memory is available
+// NOTE: test_22 assumes some kind of memory protection from kernel, irrelevant
+// as no memory management is done until phase 5
