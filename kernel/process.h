@@ -2,7 +2,7 @@
  * process.h
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori, baioc
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc, Maxime Martin
  */
 
 #ifndef _process_H_
@@ -87,6 +87,8 @@
    int          sjustreset; // = 1 if it sem just reseted
    int          sjustdelete; // = 1 if it sem just deleted
    int          retval;
+   int          next_sending_message; // next message to send in a message-queue
+   int          *next_receiving_message; // next message to receive from a message-queue
    int          m_queue_fid; // fid in which the process if sending/receving messages
    int          m_queue_rd_send; // if blocked on a reseted or deleted message queue while sending
    int          m_queue_rd_receive; // if blocked on a reseted or deleted message queue while receiving

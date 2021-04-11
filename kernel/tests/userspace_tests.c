@@ -10,15 +10,23 @@
  ******************************************************************************/
 
 #include "userspace_tests.h"
+
+#include "debug.h"
+#include "stddef.h"
+#include "string.h"
+#include "stdlib.h"
+
 #include "process.h"
 #include "message-queue.h"
-#include "debug.h"
 #include "shared_memory.h"
+#include "clock.h"
 #include "sem.h"
 #include "test1.h"
 #include "test4.h"
 #include "test11.h"
 #include "test13.h"
+#include "test16.h"
+#include "test21.h"
 
 /*******************************************************************************
  * Macros
@@ -55,11 +63,20 @@ static int test_5(void *arg);
 static int no_run(void *arg);
 static int waiter(void *arg);
 
-/*static int                test_8(void *arg);
+static int test_7(void *arg);
+static int sleep_pr1(void *arg);
+static int timer(void *arg);
+static int timer1(void *arg);
+
+static int                test_8(void *arg);
 static int                suicide_launcher(void *arg);
 static int                suicide(void *arg);
 static unsigned long long div64(unsigned long long x, unsigned long long div,
-                                unsigned long long *rem);*/
+                                unsigned long long *rem);
+
+static void write_test_10(int fid, const char *buf, unsigned long len);
+static void read_test_10(int fid, char *buf, unsigned long len);
+static int test_10_msg(void *arg);
 
 static int test_10_sem(void *arg);
 
@@ -69,9 +86,10 @@ static int proc_mutex(void *arg);
 static int test_12_msg(void *arg);
 static int rdv_proc_12_msg(void *arg);
 
-/*static int test_13_msg(void *arg);
+static int test_13_msg(void *arg);
 static int p_receiver_13_msg(void *arg);
-static int p_sender_13_msg(void *arg);*/
+static int p_sender_13_msg(void *arg);
+
 static int test_13_sem(void *arg);
 static int proc13_1(void *arg);
 static int proc13_2(void *arg);
@@ -95,6 +113,7 @@ static int proc14_1(void *arg);
 static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
+
 /*
 static int test_16_sem(void *arg);
 static unsigned long test16_1(void);
@@ -104,9 +123,21 @@ static int proc16_1(void *arg);
 static int test_17_sem(void *arg);
 static int proc17_1(void *arg);
 static int proc17_2(void *arg);
+
+static int test_16_msg(void *arg);
+static int proc_16_1_msg(void *arg);
+static int proc_16_2_msg(void *arg);
+static int proc_16_3_msg(void *arg);
+
+static int proc_return(void *arg);
+static int test_17_msg(void *arg);
+
+static int test_21(void *arg);
+static int shm_checker(void *arg);
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+
 
 /*******************************************************************************
  * Public function
@@ -115,6 +146,7 @@ static int proc17_2(void *arg);
 void run_userspace_tests()
 {
   int pid;
+
   pid = start(test_0, 0, 128, "test_0", 0);
   waitpid(pid, NULL);
   pid = start(test_1, 0, 128, "test_1", 0);
@@ -127,8 +159,10 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_8, 0, 128, "test_8", 0);
-  waitpid(pid, NULL);*/
+  pid = start(test_7, 0, 128, "test_7", 0);
+  waitpid(pid, NULL);
+  pid = start(test_8, 0, 128, "test_8", 0);
+  waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
   waitpid(pid,NULL);
   pid = start(test_11_sem, 0, 128, "test_11_sem", 0);
@@ -137,12 +171,12 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
   waitpid(pid, NULL);
+  pid = start(test_13_msg, 0, 128, "test_13_msg", 0);
+  waitpid(pid, NULL);
   pid = start(test_13_sem, 0, 128, "test_13_sem", 0);
   waitpid(pid, NULL);
   pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_13_msg, 0, 128, "test_13_msg", 0);
-  waitpid(pid, NULL);*/
   pid = start(test_14_msg, 0, 128, "test_14_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_15_msg, 0, 128, "test_15_msg", 0);
@@ -152,6 +186,12 @@ void run_userspace_tests()
   /*pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
   waitpid(pid, NULL);*/
   pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
+  waitpid(pid, NULL);
+  pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
+  waitpid(pid, NULL);
+  pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
+  waitpid(pid, NULL);
+  pid = start(test_21, 0, 128, "test_21", 0);
   waitpid(pid, NULL);
 }
 
@@ -391,7 +431,7 @@ static int busy1(void *arg)
     for (i = 0; i < loop_count1; i++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   return 0;
@@ -409,7 +449,7 @@ int busy2(void *arg)
     for (k = 0; k < loop_count1; k++) {
       test_it();
       for (j = 0; j < loop_count0; j++)
-	;
+        ;
     }
   }
   i = chprio((int)arg, 16);
@@ -485,28 +525,122 @@ static int waiter(void *arg)
  *      Test 6
  *-----------------*/
 // TODO: Find a way to add test_6
+// NOTE: test_6 assumes we make use of ssize parameter in function start.
+// Irrelevant as we don't currently use that parameter
 
 /*-----------------*
  *      Test 7
  *-----------------*/
-// TODO: Add test_7 when shared memory is available (shm_{create/delete} needed)
+static int test_7(void *arg)
+{
+  int                     pid1, pid2, r;
+  unsigned long           c0, c, quartz, ticks, dur;
+  volatile unsigned long *timer_test_7 = NULL;
+
+  (void)arg;
+  timer_test_7 = shm_create("test7_shm");
+  assert(timer_test_7 != NULL);
+
+  assert(getprio(getpid()) == 128);
+  printf("1");
+  pid1 = start(timer1, 4000, 129, "timer1", 0);
+  assert(pid1 > 0);
+  printf(" 3");
+  assert(waitpid(-1, 0) == pid1);
+  printf(" 8 : ");
+
+  *timer_test_7 = 0;
+  pid1 = start(timer, 4000, 127, "timer", 0);
+  pid2 = start(timer, 4000, 127, "timer", 0);
+  assert(pid1 > 0);
+  assert(pid2 > 0);
+  clock_settings(&quartz, &ticks);
+  dur = 2 * quartz / ticks;
+  test_it();
+  c0 = current_clock();
+  do {
+    test_it();
+    c = current_clock();
+  } while (c == c0);
+  wait_clock(c + dur);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, 0) == pid1);
+  assert(kill(pid2) == 0);
+  assert(waitpid(pid2, 0) == pid2);
+  printf(
+      "%lu changements de contexte sur %lu tops d'horloge", *timer_test_7, dur);
+  pid1 = start(sleep_pr1, 4000, 192, "sleep_pr1", 0);
+  assert(pid1 > 0);
+  assert(kill(pid1) == 0);
+  assert(waitpid(pid1, &r) == pid1);
+  assert(r == 0);
+  printf(".\n");
+  shm_release("test7_shm");
+
+  return 0;
+}
+
+static int sleep_pr1(void *arg)
+{
+  (void)arg;
+  wait_clock(current_clock() + 2);
+  printf(" not killed !!!");
+  assert(0);
+  return 1;
+}
+
+static int timer(void *arg)
+{
+  volatile unsigned long *timer = NULL;
+  timer = shm_acquire("test7_shm");
+  assert(timer != NULL);
+
+  (void)arg;
+  while (1) {
+    unsigned long t = *timer + 1;
+    *timer = t;
+    while (*timer == t) test_it();
+  }
+  while (1)
+    ;
+  return 0;
+}
+
+static int timer1(void *arg)
+{
+  (void)arg;
+
+  unsigned long quartz;
+  unsigned long ticks;
+  unsigned long dur;
+  int           i;
+
+  clock_settings(&quartz, &ticks);
+  dur = (quartz + ticks) / ticks;
+  printf(" 2");
+  for (i = 4; i < 8; i++) {
+    wait_clock(current_clock() + dur);
+    printf(" %d", i);
+  }
+  return 0;
+}
 
 /*-----------------*
  *      Test 8
  *-----------------*/
- /*static int test_8(void *arg)
+ static int test_8(void *arg)
  {
    unsigned long long tsc1;
    unsigned long long tsc2;
    int                i, r, pid, count;
 
    (void)arg;
-   assert(getprio(getpid()) == 128);*/
+   assert(getprio(getpid()) == 128);
 
    /* Le petit-fils va passer zombie avant le fils mais ne pas
       etre attendu par waitpid. Un nettoyage automatique doit etre
       fait. */
-   /*pid = start(suicide_launcher, 4000, 129, "suicide_launcher", 0);
+   pid = start(suicide_launcher, 4000, 129, "suicide_launcher", 0);
    assert(pid > 0);
    assert(waitpid(pid, &r) == pid);
    assert(chprio(r, 192) < 0);
@@ -576,33 +710,72 @@ static int waiter(void *arg)
      q += mul;
      x -= div;
    }
- }*/
+ }
 
 /*-----------------*
  *      Test 9
  *-----------------*/
-// TODO: Add test_9 when shared memory is available (shm_{create/delete} needed)
+// NOTE: test_9 removed as it was not relevant on kernel side (no interrupts)
 
 /*-----------------*
  *      Test 10
  *-----------------*/
- int test_10_sem(void *arg)
+
+int test_10_sem(void *arg)
+{
+        int sem1;
+        (void)arg;
+        sem1 = screate(2);
+        assert(sem1 >= 0);
+        assert(scount(sem1) == 2);
+        assert(signal(sem1) == 0);
+        assert(scount(sem1) == 3);
+        assert(signaln(sem1, 2) == 0);
+        assert(scount(sem1) == 5);
+        assert(wait(sem1) == 0);
+        assert(scount(sem1) == 4);
+        assert(sreset(sem1, 7) == 0);
+        assert(scount(sem1) == 7);
+        assert(sdelete(sem1) == 0);
+        printf("ok.\n");
+        return 0;
+}
+
+ static void write_test_10(int fid, const char *buf, unsigned long len)
  {
-         int sem1;
+         unsigned long i;
+         for (i=0; i<len; i++) {
+                 assert(psend(fid, buf[i]) == 0);
+         }
+ }
+
+ static void read_test_10(int fid, char *buf, unsigned long len)
+ {
+         unsigned long i;
+         for (i=0; i<len; i++) {
+                 int msg;
+                 assert(preceive(fid, &msg) == 0);
+                 buf[i] = (char)msg;
+         }
+ }
+ static int test_10_msg(void *arg)
+ {
+         int fid;
+         const char *str = "abcde";
+         unsigned long len = strlen(str);
+         char buf[10];
+
          (void)arg;
-         sem1 = screate(2);
-         assert(sem1 >= 0);
-         assert(scount(sem1) == 2);
-         assert(signal(sem1) == 0);
-         assert(scount(sem1) == 3);
-         assert(signaln(sem1, 2) == 0);
-         assert(scount(sem1) == 5);
-         assert(wait(sem1) == 0);
-         assert(scount(sem1) == 4);
-         assert(sreset(sem1, 7) == 0);
-         assert(scount(sem1) == 7);
-         assert(sdelete(sem1) == 0);
-         printf("ok.\n");
+
+         printf("1");
+         assert((fid = pcreate(5)) >= 0);
+         write_test_10(fid, str, len);
+         printf(" 2");
+         read_test_10(fid, buf, len);
+         buf[len] = 0;
+         assert(strcmp(str, buf) == 0);
+         assert(pdelete(fid) == 0);
+         printf(" 3.\n");
          return 0;
  }
 
@@ -844,7 +1017,7 @@ static int waiter(void *arg)
  *      Test 13
  *-----------------*/
 
- /*static int p_receiver_13_msg(void *arg)
+ static int p_receiver_13_msg(void *arg)
  {
          struct psender *ps = NULL;
          int ps_index = (int)arg;
@@ -962,7 +1135,7 @@ static int waiter(void *arg)
          printf(" 3.\n");
          shm_release("test13_shm");
          return 0;
- }*/
+ }
 
  static int test_13_sem(void *arg)
  {
@@ -1194,22 +1367,12 @@ static int waiter(void *arg)
 
           assert(chprio(pid2, 132) == 130);
           printf(" 4 t14");
-          print_list(fid1);
 
-          print_waiting_send_proc(fid1);
-          print_waiting_receive_proc(fid1);
           assert(preset(fid1) == 0);
-          print_list(fid1);
-          print_waiting_send_proc(fid1);
-          print_waiting_receive_proc(fid1);
 
           assert((preceive(fid1, &msg) == 0) && (msg == 7));
           printf(" 7 t14");
-          print_list(fid1);
-          print_waiting_send_proc(fid1);
-          print_waiting_receive_proc(fid1);
           assert(pdelete(fid1) == 0);
-
 
           printf(" 10 t14");
           assert(psend(fid2, 15) == 0);
@@ -1509,6 +1672,110 @@ static int test_15_msg(void *arg)
          return 0;
  }
 */
+
+static int proc_16_1_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i, msg;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i <= p->count; i++) {
+                assert(preceive(p->fid, &msg) == 0);
+                assert(msg == i);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int proc_16_2_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i, msg;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i < p->count; i++) {
+                assert(preceive(p->fid, &msg) == 0);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int proc_16_3_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i < p->count; i++) {
+                assert(psend(p->fid, i) == 0);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int test_16_msg(void *arg)
+{
+        int i, count, fid, pid;
+        struct tst16 *p = NULL;
+        int pids[2 * NB_PROCS];
+
+        (void)arg;
+        p = (struct tst16*) shm_create("test16_shm");
+        assert(p != NULL);
+
+        assert(getprio(getpid()) == 128);
+        for (count = 1; count <= 100; count++) {
+                fid = pcreate(count);
+                assert(fid >= 0);
+                p->count = count;
+                p->fid = fid;
+                pid = start(proc_16_1_msg, 2000, 128, "proc16_1_msg", 0);
+                assert(pid > 0);
+                for (i=0; i<=count; i++) {
+                        assert(psend(fid, i) == 0);
+                        test_it();
+                }
+                assert(waitpid(pid, 0) == pid);
+                assert(pdelete(fid) == 0);
+        }
+
+        p->count = 20000;
+        fid = pcreate(50);
+        assert(fid >= 0);
+        p->fid = fid;
+        for (i = 0; i< NB_PROCS; i++) {
+                pid = start(proc_16_2_msg, 2000, 127, "proc16_2_msg", 0);
+                assert(pid > 0);
+                pids[i] = pid;
+        }
+        for (i=0; i < NB_PROCS; i++) {
+                pid = start(proc_16_3_msg, 2000, 127, "proc16_3_msg", 0);
+                assert(pid > 0);
+                pids[NB_PROCS + i] = pid;
+        }
+        for (i=0; i < 2 * NB_PROCS; i++) {
+                assert(waitpid(pids[i], 0) == pids[i]);
+        }
+        assert(pcount(fid, &count) == 0);
+        assert(count == 0);
+        assert(pdelete(fid) == 0);
+
+        shm_release("test16_shm");
+        printf("ok test 16.\n");
+        return 0;
+}
 /*-----------------*
  *      Test 17
  *-----------------*/
@@ -1650,6 +1917,116 @@ static int test_15_msg(void *arg)
          return 0;
  }
 
+ static int ids[1200];
+
+ static const int heap_len = 64 << 20;
+
+ static int proc_return(void *arg)
+ {
+         return (int)arg;
+ }
+
+ static int test_17_msg(void *arg)
+ {
+         int i, n, nx;
+         int l = sizeof(ids) / sizeof(int);
+         int count;
+         int prio;
+
+         (void)arg;
+
+         n = 0;
+         while (1) {
+                 int fid = pcreate(1);
+                 if (fid < 0) break;
+                 ids[n++] = fid;
+                 if (n == l) {
+                         assert(!"Maximum number of queues too high !");
+                 }
+                 test_it();
+         }
+         for (i=0; i<n; i++) {
+                 assert(pdelete(ids[i]) == 0);
+                 test_it();
+         }
+         for (i=0; i<n; i++) {
+                 int fid = pcreate(1);
+                 assert(fid >= 0);
+                 ids[i] = fid;
+                 test_it();
+         }
+         assert(pcreate(1) < 0);
+         for (i=0; i<n; i++) {
+                 assert(pdelete(ids[i]) == 0);
+                 test_it();
+         }
+         printf("%d", n);
+
+         for (i=0; i<n; i++) {
+                 int fid = pcreate(1);
+                 assert(fid >= 0);
+                 assert(psend(fid, i) == 0);
+                 ids[i] = fid;
+                 test_it();
+         }
+         assert(pcreate(1) < 0);
+         for (i=0; i<n; i++) {
+                 int msg;
+                 assert(preceive(ids[i], &msg) == 0);
+                 assert(msg == i);
+                 assert(pdelete(ids[i]) == 0);
+                 test_it();
+         }
+
+         count = heap_len / (int)sizeof(int);
+         count /= n - 1;
+         nx = 0;
+         while (nx < n) {
+                 int fid = pcreate(count);
+                 if (fid < 0) break;
+                 ids[nx++] = fid;
+                 test_it();
+         }
+         assert(nx < n);
+         for (i=0; i<nx; i++) {
+                 assert(pdelete(ids[i]) == 0);
+                 test_it();
+         }
+         printf(" > %d", nx);
+
+         prio = getprio(getpid());
+         assert(prio == 128);
+         n = 0;
+         while (1) {
+                 int pid = start(no_run, 2000, 127, "no_run", 0);
+                 if (pid < 0) break;
+                 ids[n++] = pid;
+                 if (n == l) {
+                         assert(!"Maximum number of processes too high !");
+                 }
+                 test_it();
+         }
+         for (i=0; i<n; i++) {
+                 assert(kill(ids[i]) == 0);
+                 assert(waitpid(ids[i], 0) == ids[i]);
+                 test_it();
+         }
+         for (i=0; i<n; i++) {
+                 int pid = start(proc_return, 2000, 129, "proc_return", (void *)i);
+                 assert(pid > 0);
+                 ids[i] = pid;
+                 test_it();
+         }
+         for (i=0; i<n; i++) {
+                 int retval;
+                 assert(waitpid(ids[i], &retval) == ids[i]);
+                 assert(retval == i);
+                 test_it();
+         }
+         printf(", %d.\n", n);
+         return 0;
+  }
+
 /*-----------------*
  *      Test 18
  *-----------------*/
@@ -1668,9 +2045,87 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 21
  *-----------------*/
-// TODO: Add test_21 when shared memory is available
+static int test_21(void *arg)
+{
+  (void)arg;
+  char *shared_area = NULL;
+  int   checker_pid = -1;
+  int   checker_ret = -1;
+
+  printf("\n%s\n", "Test 21: checking shared memory space ...");
+
+  shared_area = shm_create("test21-shm");
+  assert(shared_area != NULL);
+
+  /* We have to be able to fill at least 1 page */
+  memset(shared_area, FILL_VALUE, 4096);
+
+  /* Let the check do its job */
+  checker_pid =
+      start(shm_checker, 4000, getprio(getpid()) - 1, "shm_checker", NULL);
+  assert(checker_pid > 0);
+
+  waitpid(checker_pid, &checker_ret);
+
+  switch (checker_ret) {
+  case CHECKER_SUCCESS:
+    printf(
+        " -> %s\n -> %s\n", "\"shm_checker\" ends correctly.", "TEST PASSED");
+    break;
+  case 0:
+    printf(" -> %s\n -> %s\n", "\"shm_checker\" killed.", "TEST FAILED");
+    break;
+  default:
+    printf(" -> %s\n -> %s\n",
+           "\"shm_checker\" returned inconsistent value. Check waitpid "
+           "implementation.",
+           "TEST FAILED");
+  }
+
+  int shm_valid = 1;
+  for (int i = 0; i < 4096; i++) {
+    if (shared_area[i] != 0) {
+      shm_valid = 0;
+    }
+  }
+
+  if (shm_valid) {
+    printf(" -> %s\n -> %s\n", "shm area content is correct.", "TEST PASSED");
+  } else {
+    printf(" -> %s\n -> %s\n", "shm area content is invalid.", "TEST FAILED");
+  }
+
+  shm_release("test21-shm");
+  return 0;
+}
+
+static int shm_checker(void *arg)
+{
+  (void)arg;
+  char *shared_area = NULL;
+
+  shared_area = shm_acquire("test21-shm");
+  assert(shared_area != NULL);
+
+  /* Check we get the memory filled by the main process */
+  for (int i = 0; i < 4096; i++) {
+    if (shared_area[i] != (char)FILL_VALUE) {
+      return -1;
+    }
+  }
+
+  /*
+   * Fill it with something else to let the main process check we success
+   * to access it.
+   */
+  memset(shared_area, 0, 4096);
+
+  return (int)CHECKER_SUCCESS;
+}
 
 /*-----------------*
  *      Test 22
  *-----------------*/
 // TODO: Add test_22 when shared memory is available
+// NOTE: test_22 assumes some kind of memory protection from kernel, irrelevant
+// as no memory management is done until phase 5

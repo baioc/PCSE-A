@@ -61,12 +61,13 @@ CFLAGS := -m32 -march=pentium \
 		  -nostdinc \
 		  -nostdlib \
 		  -fno-stack-protector \
+		  -fno-pie -no-pie \
 		  $(DEFS)
 ASFLAGS := -m32 \
 		   -DASSEMBLER \
 		   $(DEFS)
 ARFLAGS := rcs
-LDFLAGS := -melf_i386
+LDFLAGS := -g -melf_i386
 
 # Import facilities
 include build/utils.mk
