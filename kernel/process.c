@@ -96,6 +96,9 @@ void process_init(void) // only called from kernel space
   //initialize the gestion of message queues
   init_indice_gestion_list();
 
+  //initialize the gestion of semaphores
+  init_indice_sem();
+
   // idle is the first process to run
   current_process = IDLE_PROC;
   IDLE_PROC->state = ACTIVE;

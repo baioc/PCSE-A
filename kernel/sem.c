@@ -16,8 +16,8 @@
   * Types
   ******************************************************************************/
   typedef struct _semaph semaph;
-
   typedef struct _proc proc;
+  typedef struct _sid_queue sid_queue;
  /*******************************************************************************
   * Internal function declaration
   ******************************************************************************/
@@ -27,35 +27,68 @@
   int nbr_sem = 0;
 
   semaph list_sem[MAXNBR_SEM];
+
+  static link unused_sid;
+  static link used_sid;
+
   // from process.c
   extern link ready_procs;
   extern proc *current_process;
  /*******************************************************************************
   * Public function
   ******************************************************************************/
+  void init_indice_sem(){
+    unused_sid = (link)LIST_HEAD_INIT(unused_sid);
+    used_sid = (link)LIST_HEAD_INIT(used_sid);
+    for (int i = 0; i < MAXNBR_SEM; i++){
+      sid_queue *indice_list = mem_alloc(sizeof(sid_queue));
+      if(indice_list == NULL){
+        exit(1);
+      }
+      indice_list->id = i;
+      indice_list->prio = MAXNBR_SEM - 1 - i;
+      queue_add(indice_list, &unused_sid, sid_queue, node_sid, prio);
+    }
+  }
+
+  int is_used(int sem){
+    sid_queue *iterator;
+    queue_for_each(iterator, &used_sid, sid_queue, node_sid){
+      if(iterator->id == sem){
+        return 1;
+      }
+    }
+    return 0;
+  }
   /*
   Create a semaphore with a counter value of count
   */
   int screate(short int count){
     if(nbr_sem == MAXNBR_SEM || count < 0) return -1;
-    //Looking for a blank place to create the semaphore
-    int i = 0;
-    // We should find a better way to detect if a semaphore isn't initialized
-    while(list_sem[i].sid == i){
-      i++;
-    }
-    list_sem[i].sid = i;
-    list_sem[i].count = count;
-    list_sem[i].list_blocked = (link)LIST_HEAD_INIT(list_sem[i].list_blocked);
+    sid_queue *indice_list = queue_out(&unused_sid, sid_queue, node_sid);
+    queue_add(indice_list, &used_sid, sid_queue, node_sid, prio);
+    // //Looking for a blank place to create the semaphore
+    // int i = 0;
+    // // We should find a better way to detect if a semaphore isn't initialized
+    // while(list_sem[i].sid == i){
+    //   i++;
+    // }
+    // list_sem[i].sid = i;
+    // list_sem[i].count = count;
+    // list_sem[i].list_blocked = (link)LIST_HEAD_INIT(list_sem[i].list_blocked);
+    // return i;
+    list_sem[indice_list->id].sid = indice_list->id;
+    list_sem[indice_list->id].count = count;
+    list_sem[indice_list->id].list_blocked = (link)LIST_HEAD_INIT(list_sem[indice_list->id].list_blocked);
     nbr_sem++;
-    return i;
+    return indice_list->id;
   }
-
+#define PTN(p) queue_add((p), &unused_sid, sid_queue, node_sid, prio)
   /*
   Delete the semaphore list_sem[sem] and free all the process in it list
   */
   int sdelete(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
     proc *p;
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
       p = queue_out(&(list_sem[sem].list_blocked), proc, blocked);
@@ -63,18 +96,29 @@
       p->sjustdelete = 1;
       queue_add(p, &ready_procs, proc, node, priority);
     }
-    list_sem[sem].sid = -1;
-    list_sem[sem].count = -1;
-    nbr_sem--;
-    schedule();
-    return 0;
+    sid_queue *iterator;
+    queue_for_each(iterator, &used_sid, sid_queue, node_sid){
+      if(iterator->id == sem){
+        queue_del(iterator, node_sid);
+        PTN(iterator);//, &unused_sid, sid_queue, node_sid, prio);
+        nbr_sem--;
+        schedule();
+        return 0;
+      }
+    }
+    return -1;
+    // list_sem[sem].sid = -1;
+    // list_sem[sem].count = -1;
+
+    // schedule();
+    // return 0;
   }
 
   /*
   Do the V operation on semaphore list_sem[sem]
   */
   int signal(int sem){
-    if(sem < 0 || sem >= MAXNBR_SEM || list_sem[sem].sid != sem) return -1;
+    if(sem < 0 || sem >= MAXNBR_SEM || is_used(sem) == 0) return -1;
     if((short int)(list_sem[sem].count + 1) < list_sem[sem].count) return -2;
     list_sem[sem].count += 1;
     if(list_sem[sem].count <= 0){
@@ -91,7 +135,7 @@
   Do the V operation count time on semaphore list_sem[sem]
   */
   int signaln(int sem, short int count){
-    if(sem < 0 || sem >= MAXNBR_SEM || list_sem[sem].sid != sem) return -1;
+    if(sem < 0 || sem >= MAXNBR_SEM || is_used(sem) == 0) return -1;
     if((short int)(list_sem[sem].count + count) < list_sem[sem].count)
                                                                       return -2;
     proc *p;
@@ -112,8 +156,7 @@
   Reset the semaphore list_sem[sem]
   */
   int sreset(int sem,short int count){
-    if(sem >= MAXNBR_SEM || sem < 0 || count < 0 || list_sem[sem].sid != sem)
-                                                                      return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || count < 0 || is_used(sem) == 0) return -1;
     proc *p;
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
       p = queue_out(&(list_sem[sem].list_blocked), proc, blocked);
@@ -130,7 +173,7 @@
   Test the P operation on semaphore list_sem[sem] without blocking it
   */
   int try_wait(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
     if((short int)(list_sem[sem].count - 1) > list_sem[sem].count) return -2;
     if(list_sem[sem].count <= 0) return -3;
     list_sem[sem].count -= 1;
@@ -141,7 +184,7 @@
   Do the P operation on semaphore list_sem[sem]
   */
   int wait(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
     if((short int)(list_sem[sem].count - 1) > list_sem[sem].count) return -2;
     list_sem[sem].count -= 1;
     if(list_sem[sem].count < 0){
@@ -162,7 +205,7 @@
   Return the value of the semaphore list_sem[sem]
   */
   int scount(int sem){
-    if(sem >= MAXNBR_SEM || sem < 0 || list_sem[sem].sid != sem) return -1;
+    if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
     return (int)(list_sem[sem].count) & 0x0000ffff;
   }
  /*******************************************************************************

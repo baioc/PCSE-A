@@ -114,11 +114,9 @@ static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
 
-/*
 static int test_16_sem(void *arg);
 static unsigned long test16_1(void);
 static int proc16_1(void *arg);
-*/
 
 static int test_17_sem(void *arg);
 static int proc17_1(void *arg);
@@ -146,7 +144,7 @@ static int shm_checker(void *arg);
 void run_userspace_tests()
 {
   int pid;
-
+if(true == false){
   pid = start(test_0, 0, 128, "test_0", 0);
   waitpid(pid, NULL);
   pid = start(test_1, 0, 128, "test_1", 0);
@@ -159,8 +157,10 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-  pid = start(test_7, 0, 128, "test_7", 0);
-  waitpid(pid, NULL);
+
+    pid = start(test_7, 0, 128, "test_7", 0);
+    waitpid(pid, NULL);
+
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
@@ -185,15 +185,16 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
-  waitpid(pid, NULL);*/
+  }
+  pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
+  waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
   waitpid(pid, NULL);
-  pid = start(test_21, 0, 128, "test_21", 0);
-  waitpid(pid, NULL);
   pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
+  waitpid(pid, NULL);
+  pid = start(test_21, 0, 128, "test_21", 0);
   waitpid(pid, NULL);
 }
 
@@ -1499,7 +1500,7 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 16
  *-----------------*/
- /*
+
  #define NBSEMS 10000
 
  typedef unsigned long long uint_fast64_t;
@@ -1509,38 +1510,6 @@ static int test_15_msg(void *arg)
  static const uint_fast64_t _addend = 0xB;
  static const uint_fast64_t _mask = (1ULL << 48) - 1;
  static uint_fast64_t _seed = 1;
-
- unsigned long long div64(unsigned long long x, unsigned long long div, unsigned long long *rem)
- {
-         unsigned long long mul = 1;
-         unsigned long long q;
-
-         if ((div > x) || !div) {
-                 if (rem) *rem = x;
-                 return 0;
-         }
-
-         while (!((div >> 32) & 0x80000000ULL)) {
-                 unsigned long long newd = div + div;
-                 if (newd > x) break;
-                 div = newd;
-                 mul += mul;
-         }
-
-         q = mul;
-         x -= div;
-         while (1) {
-                 mul /= 2;
-                 div /= 2;
-                 if (!mul) {
-                         if (rem) *rem = x;
-                         return q;
-                 }
-                 if (x < div) continue;
-                 q += mul;
-                 x -= div;
-         }
- }
 
  static unsigned long long mul64(unsigned long long x, unsigned long long y)
  {
@@ -1601,7 +1570,7 @@ static int test_15_msg(void *arg)
          (void)arg;
          pid = start(proc16_1, 4000 + NBSEMS * 4, 128, "proc16_1", 0);
          assert(pid > 0);
-         assert(waitpid(pid, 0) == pid); // Bloque ici
+         assert(waitpid(pid, 0) == pid);
          return 0;
  }
 
@@ -1653,17 +1622,15 @@ static int test_15_msg(void *arg)
          if (screate(0) >= 0) assert(!"*** Decrease the semaphore capacity of your system to NBSEMS to pass this test. ***");
          assert(sdelete(sems[NBSEMS/3]) == 0);
          assert(sdelete(sems[(NBSEMS/3)*2]) == 0);
+         for(int i = 0; i < NBSEMS; i++) printf("%d | %d , ",i,sems[i]);
          c2 = test16_1();
          printf("%lu ", c2);
          setSeed(seed);
          for (i=0; i<NBSEMS; i++) {
-                 // Plante à i = 7730
+                 //printf("%d\n",i);
                  short randVal = randShort();
                  if ((i != (NBSEMS/3)) && (i != (2*(NBSEMS/3)))) {
-                         assert(scount(sems[i]) == randVal);
-                         if(i == 7730){
-                           printf("On y est\n");
-                         }
+                         assert(scount(sems[i]) == randVal);// Bloque à i = 8725
                          assert(sdelete(sems[i]) == 0);
                  }
          }
@@ -1673,7 +1640,6 @@ static int test_15_msg(void *arg)
                  printf("Bad algorithm complexity in semaphore allocation.\n");
          return 0;
  }
-*/
 
 static int proc_16_1_msg(void *arg)
 {

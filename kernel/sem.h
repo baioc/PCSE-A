@@ -28,6 +28,13 @@
   };
   typedef struct _semaph semaph;
 
+  // Represents an sid index, to manage indexes requiered by sem
+  struct _sid_queue {
+    short int id;
+    int       prio;
+    link      node_sid;
+  };
+  typedef struct _sid_queue sid_queue;
  /*******************************************************************************
   * Internal function declaration
   ******************************************************************************/
@@ -37,6 +44,7 @@
  /*******************************************************************************
   * Public function
   ******************************************************************************/
+  void init_indice_sem();
   /*
   Create a semaphore
   */
