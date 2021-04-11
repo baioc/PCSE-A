@@ -165,6 +165,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
   waitpid(pid,NULL);
+  pid = start(test_10_msg, 0, 128, "test_10_msg", 0);
+  waitpid(pid,NULL);
   pid = start(test_11_sem, 0, 128, "test_11_sem", 0);
   waitpid(pid,NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
@@ -185,13 +187,13 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   /*pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
   waitpid(pid, NULL);*/
-  pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
-  waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_21, 0, 128, "test_21", 0);
+  waitpid(pid, NULL);
+  pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
   waitpid(pid, NULL);
 }
 
