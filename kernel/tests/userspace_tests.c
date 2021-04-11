@@ -21,9 +21,9 @@
 #include "shared_memory.h"
 #include "clock.h"
 #include "sem.h"
-
 #include "test1.h"
 #include "test4.h"
+#include "test11.h"
 #include "test13.h"
 #include "test16.h"
 #include "test21.h"
@@ -78,12 +78,22 @@ static void write_test_10(int fid, const char *buf, unsigned long len);
 static void read_test_10(int fid, char *buf, unsigned long len);
 static int test_10_msg(void *arg);
 
+static int test_10_sem(void *arg);
+
+static int test_11_sem(void *arg);
+static int proc_mutex(void *arg);
+
 static int test_12_msg(void *arg);
 static int rdv_proc_12_msg(void *arg);
 
 static int test_13_msg(void *arg);
 static int p_receiver_13_msg(void *arg);
 static int p_sender_13_msg(void *arg);
+
+static int test_13_sem(void *arg);
+static int proc13_1(void *arg);
+static int proc13_2(void *arg);
+static int proc13_3(void *arg);
 
  static int test_14_msg(void *arg);
  static int psender_14_1(void *arg);
@@ -103,6 +113,16 @@ static int proc14_1(void *arg);
 static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
+
+/*
+static int test_16_sem(void *arg);
+static unsigned long test16_1(void);
+static int proc16_1(void *arg);
+*/
+
+static int test_17_sem(void *arg);
+static int proc17_1(void *arg);
+static int proc17_2(void *arg);
 
 static int test_16_msg(void *arg);
 static int proc_16_1_msg(void *arg);
@@ -143,28 +163,37 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
+  pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
+  waitpid(pid,NULL);
   pid = start(test_10_msg, 0, 128, "test_10_msg", 0);
-  waitpid(pid, NULL);
+  waitpid(pid,NULL);
+  pid = start(test_11_sem, 0, 128, "test_11_sem", 0);
+  waitpid(pid,NULL);
   pid = start(test_12_msg, 0, 128, "test_12_msg", 0);
   waitpid(pid, NULL);
+  pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
+  waitpid(pid, NULL);
   pid = start(test_13_msg, 0, 128, "test_13_msg", 0);
+  waitpid(pid, NULL);
+  pid = start(test_13_sem, 0, 128, "test_13_sem", 0);
+  waitpid(pid, NULL);
+  pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
   waitpid(pid, NULL);
   pid = start(test_14_msg, 0, 128, "test_14_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_15_msg, 0, 128, "test_15_msg", 0);
   waitpid(pid, NULL);
-
-  pid = start(test_12_sem, 0, 128, "test_12_sem", 0);
-  waitpid(pid, NULL);
-  pid = start(test_14_sem, 0, 128, "test_14_sem", 0);
-  waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
   waitpid(pid, NULL);
+  /*pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
+  waitpid(pid, NULL);*/
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_21, 0, 128, "test_21", 0);
+  waitpid(pid, NULL);
+  pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
   waitpid(pid, NULL);
 }
 
@@ -693,6 +722,27 @@ static int timer1(void *arg)
 /*-----------------*
  *      Test 10
  *-----------------*/
+
+int test_10_sem(void *arg)
+{
+        int sem1;
+        (void)arg;
+        sem1 = screate(2);
+        assert(sem1 >= 0);
+        assert(scount(sem1) == 2);
+        assert(signal(sem1) == 0);
+        assert(scount(sem1) == 3);
+        assert(signaln(sem1, 2) == 0);
+        assert(scount(sem1) == 5);
+        assert(wait(sem1) == 0);
+        assert(scount(sem1) == 4);
+        assert(sreset(sem1, 7) == 0);
+        assert(scount(sem1) == 7);
+        assert(sdelete(sem1) == 0);
+        printf("ok.\n");
+        return 0;
+}
+
  static void write_test_10(int fid, const char *buf, unsigned long len)
  {
          unsigned long i;
@@ -735,6 +785,100 @@ static int timer1(void *arg)
  *      Test 11
  *-----------------*/
 
+ void xwait(union sem *s)
+ {
+         assert(wait(s->sem) == 0);
+ }
+
+ void xsignal(union sem *s)
+ {
+         assert(signal(s->sem) == 0);
+ }
+
+ void xscreate(union sem *s)
+ {
+         assert((s->sem = screate(0)) >= 0);
+ }
+
+ void xsdelete(union sem *s)
+ {
+         assert(sdelete(s->sem) == 0);
+ }
+
+ static int test_11_sem(void *arg)
+ {
+         struct test11_shared *shared = NULL;
+         int pid1, pid2, pid3, pid4;
+
+         (void)arg;
+         shared = (struct test11_shared*) shm_create("test11_shm");
+         assert(shared != NULL);
+         assert(getprio(getpid()) == 128);
+         xscreate(&shared->sem);
+         shared->in_mutex = 0;
+         printf("1");
+
+         pid1 = start(proc_mutex, 4000, 130, "proc_mutex", 0);
+         pid2 = start(proc_mutex, 4000, 132, "proc_mutex", 0);
+         pid3 = start(proc_mutex, 4000, 131, "proc_mutex", 0);
+         pid4 = start(proc_mutex, 4000, 129, "proc_mutex", 0);
+         assert(pid1 > 0);
+         assert(pid2 > 0);
+         assert(pid3 > 0);
+         assert(pid4 > 0);
+         assert(chprio(getpid(), 160) == 128);
+         printf(" 6");
+         xsignal(&shared->sem);
+         assert(waitpid(-1, 0) == pid2);
+         assert(waitpid(-1, 0) == pid3);
+         assert(waitpid(-1, 0) == pid1);
+         assert(waitpid(-1, 0) == pid4);
+         assert(waitpid(-1, 0) < 0);
+         assert(chprio(getpid(), 128) == 160);
+         xsdelete(&shared->sem);
+         printf(" 11.\n");
+
+         return 0;
+ }
+
+ static int proc_mutex(void *arg)
+ {
+         struct test11_shared *shared = NULL;
+         int p = -1;
+         int msg;
+
+         (void)arg;
+         shared = (struct test11_shared*) shm_acquire("test11_shm");
+         assert(shared != NULL);
+         p = getprio(getpid());
+         assert(p > 0);
+
+         switch (p) {
+                 case 130:
+                         msg = 2;
+                         break;
+                 case 132:
+                         msg = 3;
+                         break;
+                 case 131:
+                         msg = 4;
+                         break;
+                 case 129:
+                         msg = 5;
+                         break;
+                 default:
+                         msg = 15;
+         }
+         printf(" %d", msg);
+         xwait(&shared->sem);
+         printf(" %d", 139 - p);
+         assert(!(shared->in_mutex++));
+         chprio(getpid(), 16);
+         chprio(getpid(), p);
+         shared->in_mutex--;
+         xsignal(&shared->sem);
+         return 0;
+ }
 
 /*-----------------*
  *      Test 12
@@ -995,6 +1139,90 @@ static int timer1(void *arg)
          return 0;
  }
 
+ static int test_13_sem(void *arg)
+ {
+         int sem;
+         int pid1, pid2, pid3;
+         int ret;
+
+         (void)arg;
+
+         assert(getprio(getpid()) == 128);
+         assert((sem = screate(1)) >= 0);
+         pid1 = start(proc13_1, 4000, 129, "proc13_1", (void *)sem);
+         assert(pid1 > 0);
+         printf(" 2");
+         pid2 = start(proc13_2, 4000, 127, "proc13_2", (void *)sem);
+         assert(pid2 > 0);
+         pid3 = start(proc13_3, 4000, 130, "proc13_3", (void *)sem);
+         assert(pid3 > 0);
+         printf(" 4");
+         assert(chprio(getpid(), 126) == 128);
+         printf(" 6");
+         assert(chprio(getpid(), 128) == 126);
+         assert(sreset(sem, 1) == 0);
+         printf(" 10");
+         assert(chprio(getpid(), 126) == 128);
+         assert(chprio(getpid(), 128) == 126);
+         assert(sdelete(sem) == 0);
+         printf(" 14");
+         assert(waitpid(pid1, &ret) == pid1);
+         assert(ret == 1);
+         assert(waitpid(-1, &ret) == pid3);
+         assert(ret == 3);
+         assert(waitpid(-1, &ret) == pid2);
+         assert(ret == 2);
+         assert(signal(sem) == -1);
+         assert(scount(sem) == -1);
+         assert(sdelete(sem) == -1);
+         printf(" 16.\n");
+         return 0;
+ }
+
+ static int proc13_1(void *arg)
+ {
+         int sem = (int)arg;
+         assert(try_wait(sem) == 0);
+         assert(try_wait(sem) == -3);
+         printf("1");
+         assert(wait(sem) == -4);
+         printf(" 9");
+         assert(wait(sem) == -3);
+         printf(" 13");
+         assert(wait(sem) == -1);
+
+         exit(1);
+ }
+
+ static int proc13_2(void *arg)
+ {
+         int sem = (int)arg;
+         printf(" 5");
+         assert(wait(sem) == -4);
+         printf(" 11");
+         assert(wait(sem) == -3);
+         printf(" 15");
+         assert(wait(sem) == -1);
+
+         return 2;
+ }
+
+ static int proc13_3(void *arg)
+ {
+         int sem = (int)arg;
+         printf(" 3");
+         assert(wait(sem) == -4);
+         printf(" 7");
+         assert(wait(sem) == 0);
+         printf(" 8");
+         assert(wait(sem) == -3);
+         printf(" 12");
+         assert(wait(sem) == -1);
+         exit(3);
+         assert(!"Should not arrive here !");
+         while(1);
+ }
+
 /*-----------------*
  *      Test 14
  *-----------------*/
@@ -1177,7 +1405,7 @@ static int timer1(void *arg)
          assert(signaln(sem, 32760) == 0);
          assert(signaln(sem, 6) == -2);
          assert(scount(sem) == 32762);
-         assert(wait(sem) == 0); // Bloque ici
+         assert(wait(sem) == 0);
          assert(scount(sem) == 32761);
          assert(signaln(sem, 30000) == -2);
          assert(scount(sem) == 32761);
@@ -1271,114 +1499,425 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 16
  *-----------------*/
+ /*
+ #define NBSEMS 10000
 
- static int proc_16_1_msg(void *arg)
+ typedef unsigned long long uint_fast64_t;
+ typedef unsigned long uint_fast32_t;
+
+ static const uint_fast64_t _multiplier = 0x5DEECE66DULL;
+ static const uint_fast64_t _addend = 0xB;
+ static const uint_fast64_t _mask = (1ULL << 48) - 1;
+ static uint_fast64_t _seed = 1;
+
+ unsigned long long div64(unsigned long long x, unsigned long long div, unsigned long long *rem)
  {
-         struct tst16 *p = NULL;
-         int i, msg;
+         unsigned long long mul = 1;
+         unsigned long long q;
 
-         (void)arg;
-         p = shm_acquire("test16_shm");
-         assert(p != NULL);
-
-         for (i = 0; i <= p->count; i++) {
-                 assert(preceive(p->fid, &msg) == 0);
-                 assert(msg == i);
-                 test_it();
+         if ((div > x) || !div) {
+                 if (rem) *rem = x;
+                 return 0;
          }
-         shm_release("test16_shm");
-         return 0;
- }
 
- static int proc_16_2_msg(void *arg)
- {
-         struct tst16 *p = NULL;
-         int i, msg;
-
-         (void)arg;
-         p = shm_acquire("test16_shm");
-         assert(p != NULL);
-
-         for (i = 0; i < p->count; i++) {
-                 assert(preceive(p->fid, &msg) == 0);
-                 test_it();
+         while (!((div >> 32) & 0x80000000ULL)) {
+                 unsigned long long newd = div + div;
+                 if (newd > x) break;
+                 div = newd;
+                 mul += mul;
          }
-         shm_release("test16_shm");
-         return 0;
- }
 
- static int proc_16_3_msg(void *arg)
- {
-         struct tst16 *p = NULL;
-         int i;
-
-         (void)arg;
-         p = shm_acquire("test16_shm");
-         assert(p != NULL);
-
-         for (i = 0; i < p->count; i++) {
-                 assert(psend(p->fid, i) == 0);
-                 test_it();
-         }
-         shm_release("test16_shm");
-         return 0;
- }
-
- static int test_16_msg(void *arg)
- {
-         int i, count, fid, pid;
-         struct tst16 *p = NULL;
-         int pids[2 * NB_PROCS];
-
-         (void)arg;
-         p = (struct tst16*) shm_create("test16_shm");
-         assert(p != NULL);
-
-         assert(getprio(getpid()) == 128);
-         for (count = 1; count <= 100; count++) {
-                 fid = pcreate(count);
-                 assert(fid >= 0);
-                 p->count = count;
-                 p->fid = fid;
-                 pid = start(proc_16_1_msg, 2000, 128, "proc16_1_msg", 0);
-                 assert(pid > 0);
-                 for (i=0; i<=count; i++) {
-                         assert(psend(fid, i) == 0);
-                         test_it();
+         q = mul;
+         x -= div;
+         while (1) {
+                 mul /= 2;
+                 div /= 2;
+                 if (!mul) {
+                         if (rem) *rem = x;
+                         return q;
                  }
-                 assert(waitpid(pid, 0) == pid);
-                 assert(pdelete(fid) == 0);
+                 if (x < div) continue;
+                 q += mul;
+                 x -= div;
          }
+ }
 
-         p->count = 20000;
-         fid = pcreate(50);
-         assert(fid >= 0);
-         p->fid = fid;
-         for (i = 0; i< NB_PROCS; i++) {
-                 pid = start(proc_16_2_msg, 2000, 127, "proc16_2_msg", 0);
-                 assert(pid > 0);
-                 pids[i] = pid;
-         }
-         for (i=0; i < NB_PROCS; i++) {
-                 pid = start(proc_16_3_msg, 2000, 127, "proc16_3_msg", 0);
-                 assert(pid > 0);
-                 pids[NB_PROCS + i] = pid;
-         }
-         for (i=0; i < 2 * NB_PROCS; i++) {
-                 assert(waitpid(pids[i], 0) == pids[i]);
-         }
-         assert(pcount(fid, &count) == 0);
-         assert(count == 0);
-         assert(pdelete(fid) == 0);
+ static unsigned long long mul64(unsigned long long x, unsigned long long y)
+ {
+         unsigned long a, b, c, d, e, f, g, h;
+         unsigned long long res = 0;
+         a = x & 0xffff;
+         x >>= 16;
+         b = x & 0xffff;
+         x >>= 16;
+         c = x & 0xffff;
+         x >>= 16;
+         d = x & 0xffff;
+         e = y & 0xffff;
+         y >>= 16;
+         f = y & 0xffff;
+         y >>= 16;
+         g = y & 0xffff;
+         y >>= 16;
+         h = y & 0xffff;
+         res = d * e;
+         res += c * f;
+         res += b * g;
+         res += a * h;
+         res <<= 16;
+         res += c * e;
+         res += b * f;
+         res += a * g;
+         res <<= 16;
+         res += b * e;
+         res += a * f;
+         res <<= 16;
+         res += a * e;
+         return res;
+ }
 
-         shm_release("test16_shm");
-         printf("ok test 16.\n");
+ static uint_fast32_t randBits(int _bits)
+ {
+         uint_fast32_t rbits;
+         uint_fast64_t nextseed = (mul64(_seed, _multiplier) + _addend) & _mask;
+         _seed = nextseed;
+         rbits = nextseed >> 16;
+         return rbits >> (32 - _bits);
+ }
+
+ short randShort()
+ {
+         return randBits(15);
+ }
+
+ void setSeed(uint_fast64_t _s)
+ {
+         _seed = _s;
+ }
+
+ static int test_16_sem(void *arg)
+ {
+         int pid;
+         (void)arg;
+         pid = start(proc16_1, 4000 + NBSEMS * 4, 128, "proc16_1", 0);
+         assert(pid > 0);
+         assert(waitpid(pid, 0) == pid); // Bloque ici
          return 0;
  }
 
+ static unsigned long test16_1(void)
+ {
+         unsigned long long tsc, tsc1, tsc2;
+         unsigned long count = 0;
+
+         __asm__ __volatile__("rdtsc":"=A"(tsc1));
+         tsc2 = tsc1 + 1000000000;
+         assert(tsc1 < tsc2);
+         do {
+                 unsigned i;
+                 test_it();
+                 for (i=0; i<100; i++) {
+                         int sem1 = screate(2);
+                         int sem2 = screate(1);
+                         assert(sem1 >= 0);
+                         assert(sem2 >= 0);
+                         assert(sem1 != sem2);
+                         assert(sdelete(sem1) == 0);
+                         assert(sdelete(sem2) == 0);
+                 }
+                 __asm__ __volatile__("rdtsc":"=A"(tsc));
+                 count += 2 * i;
+
+         } while (tsc < tsc2);
+         return (unsigned long)div64(tsc - tsc1, count, 0);
+ }
+
+ static int proc16_1(void *arg)
+ {
+         int sems[NBSEMS];
+         int i;
+         unsigned long c1, c2;
+         unsigned long long seed;
+
+         (void)arg;
+
+         c1 = test16_1();
+         printf("%lu ", c1);
+         __asm__ __volatile__("rdtsc":"=A"(seed));
+         setSeed(seed);
+         for (i=0; i<NBSEMS; i++) {
+                 int sem = screate(randShort());
+                 if (sem < 0) assert(!"*** Increase the semaphore capacity of your system to NBSEMS to pass this test. ***");
+                 sems[i] = sem;
+         }
+         if (screate(0) >= 0) assert(!"*** Decrease the semaphore capacity of your system to NBSEMS to pass this test. ***");
+         assert(sdelete(sems[NBSEMS/3]) == 0);
+         assert(sdelete(sems[(NBSEMS/3)*2]) == 0);
+         c2 = test16_1();
+         printf("%lu ", c2);
+         setSeed(seed);
+         for (i=0; i<NBSEMS; i++) {
+                 // Plante à i = 7730
+                 short randVal = randShort();
+                 if ((i != (NBSEMS/3)) && (i != (2*(NBSEMS/3)))) {
+                         assert(scount(sems[i]) == randVal);
+                         if(i == 7730){
+                           printf("On y est\n");
+                         }
+                         assert(sdelete(sems[i]) == 0);
+                 }
+         }
+         if (c2 < 2 * c1)
+                 printf("ok.\n");
+         else
+                 printf("Bad algorithm complexity in semaphore allocation.\n");
+         return 0;
+ }
+*/
+
+static int proc_16_1_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i, msg;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i <= p->count; i++) {
+                assert(preceive(p->fid, &msg) == 0);
+                assert(msg == i);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int proc_16_2_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i, msg;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i < p->count; i++) {
+                assert(preceive(p->fid, &msg) == 0);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int proc_16_3_msg(void *arg)
+{
+        struct tst16 *p = NULL;
+        int i;
+
+        (void)arg;
+        p = shm_acquire("test16_shm");
+        assert(p != NULL);
+
+        for (i = 0; i < p->count; i++) {
+                assert(psend(p->fid, i) == 0);
+                test_it();
+        }
+        shm_release("test16_shm");
+        return 0;
+}
+
+static int test_16_msg(void *arg)
+{
+        int i, count, fid, pid;
+        struct tst16 *p = NULL;
+        int pids[2 * NB_PROCS];
+
+        (void)arg;
+        p = (struct tst16*) shm_create("test16_shm");
+        assert(p != NULL);
+
+        assert(getprio(getpid()) == 128);
+        for (count = 1; count <= 100; count++) {
+                fid = pcreate(count);
+                assert(fid >= 0);
+                p->count = count;
+                p->fid = fid;
+                pid = start(proc_16_1_msg, 2000, 128, "proc16_1_msg", 0);
+                assert(pid > 0);
+                for (i=0; i<=count; i++) {
+                        assert(psend(fid, i) == 0);
+                        test_it();
+                }
+                assert(waitpid(pid, 0) == pid);
+                assert(pdelete(fid) == 0);
+        }
+
+        p->count = 20000;
+        fid = pcreate(50);
+        assert(fid >= 0);
+        p->fid = fid;
+        for (i = 0; i< NB_PROCS; i++) {
+                pid = start(proc_16_2_msg, 2000, 127, "proc16_2_msg", 0);
+                assert(pid > 0);
+                pids[i] = pid;
+        }
+        for (i=0; i < NB_PROCS; i++) {
+                pid = start(proc_16_3_msg, 2000, 127, "proc16_3_msg", 0);
+                assert(pid > 0);
+                pids[NB_PROCS + i] = pid;
+        }
+        for (i=0; i < 2 * NB_PROCS; i++) {
+                assert(waitpid(pids[i], 0) == pids[i]);
+        }
+        assert(pcount(fid, &count) == 0);
+        assert(count == 0);
+        assert(pdelete(fid) == 0);
+
+        shm_release("test16_shm");
+        printf("ok test 16.\n");
+        return 0;
+}
 /*-----------------*
  *      Test 17
  *-----------------*/
+
+ struct test17_buf_st {
+     int mutex;
+     int wsem;
+     unsigned wpos;
+     int rsem;
+     unsigned rpos;
+     char buf[100];
+     int received[256];
+ };
+
+ // Increment a variable in a single atomic operation
+ static __inline__ void atomic_incr(int *atomic)
+ {
+     __asm__ __volatile__("incl %0" : "+m" (*atomic) : : "cc");
+ }
+
+ static int test_17_sem(void *arg)
+ {
+         int pid[6];
+         int i;
+         struct test17_buf_st *st = NULL;
+         int count = 0;
+
+         (void)arg;
+         st = (struct test17_buf_st*) shm_create("test17_shm");
+         assert(st != NULL);
+
+         assert(getprio(getpid()) == 128);
+         st->mutex = screate(1);
+         assert(st->mutex >= 0);
+         st->wsem = screate(100);
+         assert(st->wsem >= 0);
+         st->wpos = 0;
+         st->rsem = screate(0);
+         assert(st->rsem >= 0);
+         st->rpos = 0;
+         for (i=0; i<256; i++) {
+                 st->received[i] = 0;
+         }
+         for (i=0; i<3; i++) {
+                 pid[i] = start(proc17_1, 4000, 129, "proc17_1", &st);
+                 assert(pid[i] > 0);
+         }
+         for (i=3; i<6; i++) {
+                 pid[i] = start(proc17_2, 4000, 129, "proc17_2", &st);
+                 assert(pid[i] > 0);
+         }
+         for (i=0; i<3; i++) {
+                 int ret;
+                 assert(waitpid(pid[i], &ret) == pid[i]);
+                 count += ret;
+         }
+         assert(scount(st->rsem) == 0xfffd);
+         for (i=3; i<6; i++) {
+                 int ret;
+                 assert(kill(pid[i]) == 0);
+                 assert(waitpid(pid[i], &ret) == pid[i]);
+         }
+         assert(scount(st->mutex) == 1);
+         assert(scount(st->wsem) == 100);
+         assert(scount(st->rsem) == 0);
+         assert(sdelete(st->mutex) == 0);
+         assert(sdelete(st->wsem) == 0);
+         assert(sdelete(st->rsem) == 0);
+         for (i=0; i<256; i++) {
+                 int n = st->received[i];
+                 if (n != count) {
+                         printf("st->received[%d] == %d, count == %d\n", i, n, count);
+                         assert(n == count);
+                 }
+         }
+         printf("ok (%d chars sent).\n", count * 256);
+         return 0;
+ }
+
+ static void buf_send(char x, struct test17_buf_st *st)
+ {
+     assert(wait(st->wsem) == 0);
+     assert(wait(st->mutex) == 0);
+     st->buf[(st->wpos++) % sizeof(st->buf)] = x;
+     assert(signal(st->mutex) == 0);
+     assert(signal(st->rsem) == 0);
+ }
+
+ static int proc17_1(void *arg)
+ {
+         struct test17_buf_st *st = NULL;
+         unsigned long long tsc, tsc2;
+         int count;
+
+         (void)arg;
+
+         st = (struct test17_buf_st*) shm_acquire("test17_shm");
+
+         __asm__ __volatile__("rdtsc":"=A"(tsc));
+         tsc2 = tsc + 1000000000;
+         assert(tsc < tsc2);
+         do {
+                 int j;
+                 for (j=0; j<256; j++) {
+                         buf_send((char)j, st);
+                 }
+                 count++;
+                 __asm__ __volatile__("rdtsc":"=A"(tsc));
+         } while (tsc < tsc2);
+         shm_release("test17_shm");
+         return count;
+ }
+
+ static int buf_receive(struct test17_buf_st *st)
+ {
+     int x;
+     assert(wait(st->rsem) == 0);
+     assert(wait(st->mutex) == 0);
+     x = 0xff & (int)(st->buf[(st->rpos++) % sizeof(st->buf)]);
+     assert(signal(st->mutex) == 0);
+     assert(signal(st->wsem) == 0);
+     return x;
+ }
+
+ static int proc17_2(void *arg)
+ {
+         struct test17_buf_st *st = NULL;
+
+         (void)arg;
+
+         st = (struct test17_buf_st*) shm_acquire("test17_shm");
+         assert(st != NULL);
+
+         while(1) {
+                 int x = buf_receive(st);
+                 atomic_incr(&st->received[x]);
+         }
+         shm_release("test17_shm");
+         return 0;
+ }
 
  static int ids[1200];
 
@@ -1488,7 +2027,7 @@ static int test_15_msg(void *arg)
          }
          printf(", %d.\n", n);
          return 0;
- }
+  }
 
 /*-----------------*
  *      Test 18
