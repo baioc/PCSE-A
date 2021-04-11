@@ -65,6 +65,7 @@
     }
     list_sem[sem].sid = -1;
     list_sem[sem].count = -1;
+    nbr_sem--;
     schedule();
     return 0;
   }
