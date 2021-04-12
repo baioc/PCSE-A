@@ -428,7 +428,7 @@ void divide_error(void)
   printf("Error [%s%%%i]: Divide by zero\n",
          current_process->name,
          current_process->pid);
-  exit(128 + 0);
+  exit(0);
 }
 
 void protection_exception(void)
@@ -436,7 +436,7 @@ void protection_exception(void)
   printf("Error [%s%%%i]: General protection fault\n",
          current_process->name,
          current_process->pid);
-  exit(128 + 13);
+  exit(0);
 }
 
 void page_fault(void)
@@ -444,7 +444,7 @@ void page_fault(void)
   printf("Error [%s%%%i]: Page fault\n",
          current_process->name,
          current_process->pid);
-  exit(128 + 14);
+  exit(0);
 }
 
 void schedule(void)

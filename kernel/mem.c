@@ -118,12 +118,15 @@ struct page *page_alloc(void)
 
 void page_free(struct page *p)
 {
-  assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
+  // if this is a process-local page, freeing it is not our problem
+  if (p < g_user_memory || p >= &g_user_memory[POOL_SIZE]) return;
 
+  // decrease refcount and stop if the page is still live
   p->refcount--;
   if (p->refcount > 0) return;
 
-  // zero out physical memory page and return it to the free list
+  // zero out and return memory back to global free list
+  assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
   memset((void *)(p->frame * PAGE_SIZE), 0, PAGE_SIZE);
   p->next = g_free_list;
   g_free_list = p;
