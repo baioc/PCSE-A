@@ -65,9 +65,9 @@ int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags)
   uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
   const unsigned  pt_index = (virt >> 12) & 0x3FF;
 
-  // setup address translation, applying flags and marking target as present
-  pgtab[pt_index] = real | (flags & 0xFFF) | PAGE_PRESENT;
-  // NOTE: no need to flush TLB, it will be done automatically on ctx_sw()
+  // setup address translation while applying flags
+  pgtab[pt_index] = real | (flags & 0xFFF);
+  // NOTE: we don't flush the TLB as it will be done automatically on CR3 assign
 
   return -1; // === ok
 }
@@ -92,7 +92,7 @@ void *translate(const uint32_t *pgdir, uint32_t virt)
 
 void mem_init(void)
 {
-  // add all pages in the pool (w/ kernel frames excluded) to the free list
+  // add all pages in the pool (kernel frames excluded) to the free list
   g_free_list = NULL;
   for (unsigned i = 0; i < POOL_SIZE; ++i) {
     g_user_memory[i].next = g_free_list;
@@ -112,13 +112,18 @@ struct page *page_alloc(void)
   struct page *p = g_free_list;
   g_free_list = g_free_list->next;
   p->frame = KERNEL_PAGES + (p - g_user_memory);
+  p->refcount = 1;
   return p;
 }
 
 void page_free(struct page *p)
 {
-  // zero out physical memory page and return it to the free list
   assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
+
+  p->refcount--;
+  if (p->refcount > 0) return;
+
+  // zero out physical memory page and return it to the free list
   memset((void *)(p->frame * PAGE_SIZE), 0, PAGE_SIZE);
   p->next = g_free_list;
   g_free_list = p;

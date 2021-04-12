@@ -2,29 +2,33 @@
 
 #include "mem.h"
 #include "userspace_apps.h"
-#include "kernel_tests.h"
 #include "stdio.h"
 
 /// Initialize console subsystem.
 extern void console_init(void);
 
-/// Initializes the system clock and timer interrupt handles.
+/// Initialize the system clock and timer interrupt handles.
 extern void clock_init(void);
 
-/// Initializes syscall handlers.
+/// Initialize syscall handlers.
 extern void syscall_init(void);
 
-/// Initializes the process management subsystem and moves to process "idle".
-extern void process_init(void);
+/// Initialize message queue management subsystem.
+extern void mq_init(void);
 
+/// Initialize semaphores.
+extern void sem_init(void);
+
+/// Initializes shared memory.
+extern void shm_init(void);
+
+/// Starts process management system and moves to process "idle".
+extern void process_init(void);
 
 void kernel_start(void)
 {
   console_init();
   printf(":: reached kernel start \n");
-
-  printf(":: running kernel tests\n");
-  kernel_run_general_tests();
 
   printf(":: configuring system timer\n");
   clock_init();
@@ -38,6 +42,15 @@ void kernel_start(void)
   printf(":: configuring syscall handlers\n");
   syscall_init();
 
-  printf(":: starting process management subsystem\n");
+  printf(":: initializing message queues \n");
+  mq_init();
+
+  printf(":: initializing shared memory subsystem\n");
+  shm_init();
+
+  printf(":: initializing semaphores\n");
+  sem_init();
+
+  printf(":: starting process scheduler\n");
   process_init();
 }

@@ -2,7 +2,7 @@
  * process.c
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori, baioc
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc, Maxime Martin
  */
 
 /*******************************************************************************
@@ -10,6 +10,7 @@
  ******************************************************************************/
 
 #include "process.h"
+#include "pm.h"
 
 #include "stddef.h"
 #include "debug.h"
@@ -21,6 +22,7 @@
 #include "clock.h"
 #include "userspace_apps.h"
 #include "interrupts.h"
+#include "stdio.h"
 
 /// Changes context between two processes, see switch.S
 extern void switch_context(uint32_t *old, uint32_t *new);
@@ -31,6 +33,12 @@ extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
 extern void divide_error_handler(void);
 extern void protection_exception_handler(void);
 extern void page_fault_handler(void);
+
+/// Manages change of priority of a process who is AWAITING_IO. @[mqueue.c]
+extern void mq_changing_proc_prio(struct proc *p);
+
+/// Manages change of priority of a process who is BLOCKED. @[sem.c]
+extern void sem_changing_proc_prio(struct proc *p);
 
 /*******************************************************************************
  * Macros
@@ -52,59 +60,9 @@ extern void page_fault_handler(void);
  * Types
  ******************************************************************************/
 
-struct proc {
-  // current state
-  enum {
-    DEAD,     // free process slot => free_procs queue
-    ZOMBIE,   // terminated but still in use => no queue, access via parent
-    SLEEPING, // waiting on its alarm => sleeping_procs queue
-    AWAITING_CHILD, // waiting for child => no queue, access via children
-    READY,          // waiting for his turn with the CPU => ready_procs queue
-    ACTIVE,         // currently running on the processor => current_process
-  } state;
-
-  // process identification
-  int   pid;
-  char *name;
-
-  // Execution context used in switch_context()
-  struct {
-    uint32_t ebx;
-    uint32_t esp;
-    uint32_t ebp;
-    uint32_t esi;
-    uint32_t edi;
-    uint32_t page_dir; // aka CR3
-    uint32_t esp0;
-  } ctx;
-
-  // scheduling information
-  int priority;
-  union {
-    unsigned long quantum; // remaining cpu time (in ticks) for this proc
-    unsigned long alarm;   // timestamp (in ticks) to wake a sleeping process
-  } time;
-  link node; // doubly-linked node used by queues
-
-  // filiation links
-  struct proc *parent;
-  link         children;
-  link         siblings;
-
-  // return value storage
-  int retval;
-
-  // dynamically allocated memory
-  uint32_t *   kernel_stack;
-  struct page *pages;
-};
-
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
-
-/// Makes the current process yield the CPU to the scheduler.
-static void schedule(void);
 
 // Starts "init", enables interrupts and loops indefinitely.
 static void idle(void);
@@ -137,7 +95,7 @@ static void destroy(struct proc *proc);
  * regions), otherwise returns 0 (and the page directory is now invalid).
  */
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            const void *contents);
+                            const void *contents, unsigned flags);
 
 /*******************************************************************************
  * Variables
@@ -219,10 +177,11 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   if (queue_empty(&free_procs)) return -1;
   struct proc *new_proc = queue_bottom(&free_procs, struct proc, node);
 
-  // otherwise set-up its pid, priority and name
+  // otherwise start setting it up
   new_proc->pid = new_proc - process_table; // calculate index from pointer
   new_proc->priority = prio;
   new_proc->name = (char *)app->name;
+  new_proc->m_queue_fid = -1;
 
   // allocate kernel stack
   new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
@@ -240,18 +199,41 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   const uint32_t app_last = mmap_region(new_proc,
                                         MMAP_USER_START,
                                         (char *)app->end - (char *)app->start,
-                                        app->start);
+                                        app->start,
+                                        PAGE_FLAGS_USER_RW);
   if (app_last == 0) goto FAIL_FREE_PAGES;
+
+  // set up empty shared memory at a 4MiB-aligned address
+  new_proc->shm_begin = app_last + 1 + PAGE_SIZE * PAGE_TABLE_LENGTH;
+  new_proc->shm_begin -= new_proc->shm_begin % (PAGE_SIZE * PAGE_TABLE_LENGTH);
+  const uint32_t shm_end = new_proc->shm_begin + (PAGE_SIZE * MAX_SHM_PAGES);
+  new_proc->shm_free = NULL;
+  for (int i = MAX_SHM_PAGES; i >= 0; --i) {
+    new_proc->shm_pages[i].next = new_proc->shm_free;
+    new_proc->shm_free = &new_proc->shm_pages[i];
+  }
+
+  // we can now preallocate a single non-shared pagetable for the shared pages
+  struct page *shm_pgtab = page_alloc();
+  if (shm_pgtab == NULL) goto FAIL_FREE_PAGES;
+  shm_pgtab->next = new_proc->pages;
+  new_proc->pages = shm_pgtab;
+  const unsigned pde = (new_proc->shm_begin >> 22) & 0x3FF;
+  ((uint32_t *)new_proc->ctx.page_dir)[pde] =
+      (shm_pgtab->frame * PAGE_SIZE) | PAGE_FLAGS_USER_RW;
 
   // allocate and map user stack
   uint32_t stack_first = MMAP_STACK_END - ssize;
   stack_first -= stack_first % PAGE_SIZE; // round down to page-aligned address
-  // we don't use the entire memory space, so data and stack memory really can't
+  // we don't use the entire memory space, so heap and stack can't really
   // bump into each other, but we'll add the check anyway while making sure
   // there's at least one unmapped page between them (to catch stack overflows)
-  if (stack_first - PAGE_SIZE <= app_last) goto FAIL_FREE_PAGES;
-  const uint32_t stack_last =
-      mmap_region(new_proc, stack_first, MMAP_STACK_END - stack_first, NULL);
+  if (stack_first - PAGE_SIZE < shm_end) goto FAIL_FREE_PAGES;
+  const uint32_t stack_last = mmap_region(new_proc,
+                                          stack_first,
+                                          MMAP_STACK_END - stack_first,
+                                          NULL,
+                                          PAGE_FLAGS_USER_RW);
   if (stack_last == 0) goto FAIL_FREE_PAGES;
   assert(stack_last == MMAP_STACK_END - 1);
 
@@ -320,15 +302,26 @@ int chprio(int pid, int newprio)
     if (current_process->priority < top->priority) schedule();
     break;
   }
+
   case READY: // re-add process to ready queue with new priority
     queue_del(proc, node);
     queue_add(proc, &ready_procs, struct proc, node, priority);
     if (proc->priority > current_process->priority) schedule();
     break;
+
+  case AWAITING_IO:
+    mq_changing_proc_prio(proc);
+    break;
+
+  case BLOCKED:
+    sem_changing_proc_prio(proc);
+    break;
+
   // new priority will take effect when it wakes up
   case AWAITING_CHILD:
   case SLEEPING:
     break;
+
   // unreachable
   case ZOMBIE:
   case DEAD:
@@ -342,7 +335,7 @@ int getprio(int pid)
 {
   if (pid < 1 || pid > NBPROC) return -1;
   struct proc *proc = &process_table[pid];
-  if (proc->state == DEAD) return -1;
+  if (proc->state == DEAD || proc->state == ZOMBIE) return -1;
   return proc->priority;
 }
 
@@ -372,6 +365,8 @@ int kill(int pid)
     break;
   case READY:
   case SLEEPING:
+  case AWAITING_IO:
+  case BLOCKED:
     queue_del(proc, node);
     /* fall through */
   case AWAITING_CHILD:
@@ -452,11 +447,7 @@ void page_fault(void)
   exit(128 + 14);
 }
 
-/*******************************************************************************
- * Internal function
- ******************************************************************************/
-
-static void schedule(void)
+void schedule(void)
 {
   // process that's passing the cpu over
   struct proc *pass = current_process;
@@ -503,6 +494,8 @@ CHECK_ALARM:
 
   // nothing to do
   case AWAITING_CHILD:
+  case AWAITING_IO:
+  case BLOCKED:
     break;
 
   // unreachable
@@ -519,9 +512,23 @@ CHECK_ALARM:
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
-  if (pass != take)
-    switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
+  switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
+
+struct proc *get_current_process(void)
+{
+  return current_process;
+}
+
+void set_ready(struct proc *proc)
+{
+  proc->state = READY;
+  queue_add(proc, &ready_procs, struct proc, node, priority);
+}
+
+/*******************************************************************************
+ * Internal function
+ ******************************************************************************/
 
 static inline void filiate(struct proc *c, struct proc *p)
 {
@@ -579,7 +586,6 @@ static void idle(void)
   const int pid = start("init", 4000, MAXPRIO, NULL);
   assert(pid > 0);
   INIT_PROC = &process_table[pid];
-  INIT_PROC->priority++; // ensures reaper deamon has the highest priority
 
   // and then stay idle forever
   sti();
@@ -587,10 +593,9 @@ static void idle(void)
 }
 
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            const void *contents)
+                            const void *contents, unsigned flags)
 {
   assert(base % PAGE_SIZE == 0); // assert alignment
-  const unsigned flags = (PAGE_USER | PAGE_WRITE | PAGE_PRESENT); // user R/W
 
   // map region in chunks of maximum size equal to that of a page
   while (size != 0) {

@@ -42,14 +42,14 @@ build: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
 # "make debug & make gdb" runs Qemu with a connected gdb session
 #
 
-run: all
+run:
 	$(QEMU) -kernel kernel/kernel.bin
 
-debug: all
+debug:
 	$(QEMU) -kernel kernel/kernel.bin -gdb tcp::1234 -S
 
 # connects gdb to an already-running qemu process on localhost:1234
-gdb: all
+gdb:
 	$(GDB) --tui -f kernel/kernel.bin \
 	       -ex "dir kernel" \
 	       -ex "target remote localhost:1234" \

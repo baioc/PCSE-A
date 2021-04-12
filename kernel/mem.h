@@ -21,6 +21,8 @@
 #define PAGE_WRITE   0x02
 #define PAGE_USER    0x04
 
+#define PAGE_FLAGS_USER_RW (PAGE_USER | PAGE_WRITE | PAGE_PRESENT)
+
 /// Userspace virtual mappings.
 #define MMAP_USER_START 0x40000000 /* 1 GiB */
 #define MMAP_STACK_END  0xC0000000 /* 3 GiB */
@@ -31,7 +33,8 @@
 
 struct page {
   unsigned     frame; // page frame index
-  struct page *next;  // while the page is allocated, this can be used freely
+  int          refcount;
+  struct page *next; // while the page is allocated, this can be used freely
 };
 
 /*******************************************************************************
@@ -53,7 +56,7 @@ void mem_init(void);
 
 /**
  * Acquires an unused page frame of exactly PAGE_SIZE zeroed-out bytes.
- * Returns a pointer to a page struct on success, otherwise NULL.
+ * On success, returns a pointer to a page struct, otherwise NULL.
  */
 struct page *page_alloc(void);
 
@@ -79,7 +82,7 @@ int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags);
  * page directory.
  *
  * In case there's no such page mappings, returns NULL, otherwise this gives
- * the physical address the virtual one would map to (which could also be NULL).
+ * the physical address the virtual one would map to.
  */
 void *translate(const uint32_t *pgdir, uint32_t virt);
 
