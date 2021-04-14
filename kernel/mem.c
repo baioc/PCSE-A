@@ -50,43 +50,53 @@ void *sbrk(ptrdiff_t diff)
 }
 
 // Reference: https://wiki.osdev.org/Paging
+
+/// Gets a pointer to the page directory entry a virtual address would need.
+static uint32_t *pgdir_ref(const uint32_t *pgdir, uint32_t virt)
+{
+  return (uint32_t *)pgdir + ((virt >> 22) & 0x3FF);
+}
+
+/**
+ * Gets a pointer to the page table entry a virtual address would need.
+ * This depends on a valid pgdir entry and returns NULL in case there isn't.
+ */
+static uint32_t *pgtab_ref(const uint32_t *pgdir, uint32_t virt)
+{
+  uint32_t pd_entry = *pgdir_ref(pgdir, virt);
+  if (!(pd_entry & PAGE_PRESENT)) return NULL;
+  uint32_t *pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
+  return (uint32_t *)pgtab + ((virt >> 12) & 0x3FF);
+}
+
+void ptab_map(uint32_t *pgdir, uint32_t virt, unsigned frame, unsigned flags)
+{
+  assert(virt % PAGE_SIZE == 0);
+  uint32_t *pd_ref = pgdir_ref(pgdir, virt);
+  *pd_ref = (frame * PAGE_SIZE) | (flags & 0xFFF);
+}
+
 int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags)
 {
-  // check for page alignment
+  // check page alignment
   assert(virt % PAGE_SIZE == 0);
   assert(real % PAGE_SIZE == 0);
 
-  // get the page dir entry and check if the associated page table is present
-  const unsigned pd_index = (virt >> 22) & 0x3FF;
-  const uint32_t pd_entry = pgdir[pd_index];
-  if (!(pd_entry & PAGE_PRESENT)) return pd_index;
+  // get page table entry reference and setup address + flags
+  uint32_t *pt_ref = pgtab_ref(pgdir, virt);
+  if (pt_ref == NULL) return -1;
+  *pt_ref = (real & 0xFFFFF000) | (flags & 0xFFF);
 
-  // get the page table entry
-  uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
-  const unsigned  pt_index = (virt >> 12) & 0x3FF;
-
-  // setup address translation while applying flags
-  pgtab[pt_index] = real | (flags & 0xFFF);
-  // NOTE: we don't flush the TLB as it will be done automatically on CR3 assign
-
-  return -1; // === ok
+  return 0;
 }
 
 void *translate(const uint32_t *pgdir, uint32_t virt)
 {
-  // get the page dir entry and check if the associated page table is present
-  const unsigned pd_index = (virt >> 22) & 0x3FF;
-  const uint32_t pd_entry = pgdir[pd_index];
-  if (!(pd_entry & PAGE_PRESENT)) return NULL;
-
-  // get the page table entry
-  uint32_t *const pgtab = (uint32_t *)(pd_entry & 0xFFFFF000);
-  const unsigned  pt_index = (virt >> 12) & 0x3FF;
-  const uint32_t  pt_entry = pgtab[pt_index];
+  uint32_t *pt_ref = pgtab_ref(pgdir, virt);
+  if (pt_ref == NULL) return NULL;
+  uint32_t pt_entry = *pt_ref;
   if (!(pt_entry & PAGE_PRESENT)) return NULL;
-
-  // get the actual physical page address and add the in-page offset in
-  const uint32_t page = (uint32_t)(pt_entry & 0xFFFFF000);
+  uint32_t page = pt_entry & 0xFFFFF000;
   return (void *)(page | (virt & 0xFFF));
 }
 
@@ -94,8 +104,8 @@ void mem_init(void)
 {
   // add all pages in the pool (kernel frames excluded) to the free list
   g_free_list = NULL;
-  for (unsigned i = 0; i < POOL_SIZE; ++i) {
-    g_user_memory[i].next = g_free_list;
+  for (int i = POOL_SIZE - 1; i >= 0; --i) {
+    g_user_memory[i].ref.next = g_free_list;
     g_free_list = &g_user_memory[i];
   }
 
@@ -110,25 +120,21 @@ struct page *page_alloc(void)
   // pop free list head and use its address to compute index and frame number
   if (g_free_list == NULL) return NULL;
   struct page *p = g_free_list;
-  g_free_list = g_free_list->next;
+  g_free_list = g_free_list->ref.next;
   p->frame = KERNEL_PAGES + (p - g_user_memory);
-  p->refcount = 1;
+  p->ref.next = NULL;
   return p;
 }
 
 void page_free(struct page *p)
 {
-  // if this is a process-local page, freeing it is not our problem
-  if (p < g_user_memory || p >= &g_user_memory[POOL_SIZE]) return;
-
-  // decrease refcount and stop if the page is still live
-  p->refcount--;
-  if (p->refcount > 0) return;
+  // check address is valid and index wasn't messed up
+  assert(p >= &g_user_memory[0] && p <= &g_user_memory[POOL_SIZE - 1]);
+  assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
 
   // zero out and return memory back to global free list
-  assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
   memset((void *)(p->frame * PAGE_SIZE), 0, PAGE_SIZE);
-  p->next = g_free_list;
+  p->ref.next = g_free_list;
   g_free_list = p;
 }
 

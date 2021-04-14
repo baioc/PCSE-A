@@ -33,8 +33,10 @@
 
 struct page {
   unsigned     frame; // page frame index
-  int          refcount;
-  struct page *next; // while the page is allocated, this can be used freely
+  union {
+    struct page *next;  // while the page is allocated, this can be used freely
+    int          count; // for shared pages only
+  } ref;
 };
 
 /*******************************************************************************
@@ -64,24 +66,29 @@ struct page *page_alloc(void);
 void page_free(struct page *p);
 
 /**
- * Creates a virtual-physical address mapping in the PGD page directory.
+ * Creates a virtual-physical address mapping in the PGDIR page directory.
  * Addresses VIRT and REAL must be page-aligned and the given FLAGS will apply.
- * NOTE: In case a mapping of VIRT already exists, it will be overwritten. Also,
- * this automatically adds PAGE_PRESENT to the given flags.
+ * NOTE: PAGE_PRESENT flag is needed to actually create the mapping, and in case
+ * a mapping of VIRT already exists, it will be overwritten.
  *
  * If the page table for the requested virtual address is not marked as present
- * in the given page directory, this routine will return its index (a non
- * negative value) and have no further effect. When this happens, you must first
- * allocate a frame for the new page table and set it up in the page directory.
- * Otherwise, returns a negative value.
+ * in the given page directory, this returns a non-zero value and has no further
+ * effect. When this happens, you must first call ptab_map().
  */
 int page_map(uint32_t *pgdir, uint32_t virt, uint32_t real, unsigned flags);
+
+/**
+ * Registers the physical page of index FRAME as the page table that would be
+ * needed for the VIRT address in PGDIR, also applying FLAGS (use PAGE_PRESENT).
+ * XXX: just like with page_map(), make sure the TLB is flushed afterwards.
+ */
+void ptab_map(uint32_t *pgdir, uint32_t virt, unsigned frame, unsigned flags);
 
 /**
  * Manually translates a virtual address to a physical one mapped in the given
  * page directory.
  *
- * In case there's no such page mappings, returns NULL, otherwise this gives
+ * In case there's no such page mapping, returns NULL, otherwise this gives
  * the physical address the virtual one would map to.
  */
 void *translate(const uint32_t *pgdir, uint32_t virt);

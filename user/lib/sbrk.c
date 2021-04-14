@@ -10,7 +10,7 @@
  */
 
 /*****************************************************************************
- * NOTE:
+ * XXX:
  * The sbrk implementation provided below works on a fixed-size heap. This is
  * provided as a stub to allow you to work without sbrk in a first time. But to
  * have a feature complete project, you'll have to implement it as a syscall.

@@ -1,5 +1,5 @@
 /*
- * syscall.h
+ * syscall.c
  *
  *  Created on: 01/04/2021
  *      Author: baioc
@@ -14,6 +14,7 @@
 #include "stdint.h"
 #include "interrupts.h"
 #include "mem.h"
+#include "stddef.h"
 #include "string.h"
 
 #include "console.h"
@@ -33,7 +34,7 @@ extern void syscall_handler(void);
 
 static int sys_cons_write(const char *str, long size)
 {
-  if (size == 0 || !access_ok((uint32_t)str, size - 1)) return 0;
+  if (!access_ok((uint32_t)str, size)) return 0;
   return cons_write(str, size);
 }
 
@@ -84,7 +85,7 @@ static int sys_kill(int pid)
 
 static int sys_start(const char *name, unsigned long ssize, int prio, void *arg)
 {
-  if (!access_ok((uint32_t)name, strlen(name))) return -13;
+  if (!access_ok((uint32_t)name, strlen(name) + 1)) return -13;
   return start(name, ssize, prio, arg);
 }
 
@@ -168,19 +169,19 @@ static int sys_wait(int sem)
 
 static void *sys_shm_create(const char *key)
 {
-  if (!access_ok((uint32_t)key, strlen(key))) return NULL;
+  if (!access_ok((uint32_t)key, strlen(key) + 1)) return NULL;
   return shm_create(key);
 }
 
 static void *sys_shm_acquire(const char *key)
 {
-  if (!access_ok((uint32_t)key, strlen(key))) return NULL;
+  if (!access_ok((uint32_t)key, strlen(key) + 1)) return NULL;
   return shm_acquire(key);
 }
 
 static void sys_shm_release(const char *key)
 {
-  if (!access_ok((uint32_t)key, strlen(key))) return;
+  if (!access_ok((uint32_t)key, strlen(key) + 1)) return;
   shm_release(key);
 }
 

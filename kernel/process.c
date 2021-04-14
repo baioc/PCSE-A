@@ -24,10 +24,10 @@
 #include "interrupts.h"
 #include "stdio.h"
 
-/// Changes context between two processes, see switch.S
+/// Changes context between two processes. @[switch.S]
 extern void switch_context(uint32_t *old, uint32_t *new);
 
-/// Forges an interrupt stack and IRETs to userspace, see switch.S
+/// Forges an interrupt stack and IRETs to userspace. @[switch.S]
 extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
 
 extern void divide_error_handler(void);
@@ -40,12 +40,19 @@ extern void mq_changing_proc_prio(struct proc *p);
 /// Manages change of priority of a process who is BLOCKED. @[sem.c]
 extern void sem_changing_proc_prio(struct proc *p);
 
+/**
+ * Initializes shared page structures at a given virtual address.
+ * Returns at-the-end shared space address on sucess, otherwise zero.
+ * @[shm.c]
+ */
+extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
 // Total number of kenel processes.
-#define NBPROC 1000
+#define NBPROC 1024
 
 // Kernel stack size, in words.
 #define KERNEL_STACK_SIZE 512
@@ -181,7 +188,6 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   new_proc->pid = new_proc - process_table; // calculate index from pointer
   new_proc->priority = prio;
   new_proc->name = (char *)app->name;
-  new_proc->m_queue_fid = -1;
 
   // allocate kernel stack
   new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
@@ -191,7 +197,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   // initialize frame list and pagedir (copy kernel's first 64 pgdir entries)
   new_proc->pages = page_alloc();
   if (new_proc->pages == NULL) goto FAIL_FREE_STACK;
-  new_proc->pages->next = NULL;
+  new_proc->pages->ref.next = NULL;
   new_proc->ctx.page_dir = new_proc->pages->frame * PAGE_SIZE;
   memcpy((uint32_t *)new_proc->ctx.page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
@@ -203,24 +209,9 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
                                         PAGE_FLAGS_USER_RW);
   if (app_last == 0) goto FAIL_FREE_PAGES;
 
-  // set up empty shared memory at a 4MiB-aligned address
-  new_proc->shm_begin = app_last + 1 + PAGE_SIZE * PAGE_TABLE_LENGTH;
-  new_proc->shm_begin -= new_proc->shm_begin % (PAGE_SIZE * PAGE_TABLE_LENGTH);
-  const uint32_t shm_end = new_proc->shm_begin + (PAGE_SIZE * MAX_SHM_PAGES);
-  new_proc->shm_free = NULL;
-  for (int i = MAX_SHM_PAGES; i >= 0; --i) {
-    new_proc->shm_pages[i].next = new_proc->shm_free;
-    new_proc->shm_free = &new_proc->shm_pages[i];
-  }
-
-  // we can now preallocate a single non-shared pagetable for the shared pages
-  struct page *shm_pgtab = page_alloc();
-  if (shm_pgtab == NULL) goto FAIL_FREE_PAGES;
-  shm_pgtab->next = new_proc->pages;
-  new_proc->pages = shm_pgtab;
-  const unsigned pde = (new_proc->shm_begin >> 22) & 0x3FF;
-  ((uint32_t *)new_proc->ctx.page_dir)[pde] =
-      (shm_pgtab->frame * PAGE_SIZE) | PAGE_FLAGS_USER_RW;
+  // set up shared memory at a 4MiB-aligned address
+  const uint32_t shm_end = shm_process_init(new_proc, app_last + 1);
+  if (shm_end == 0) goto FAIL_FREE_PAGES;
 
   // allocate and map user stack
   uint32_t stack_first = MMAP_STACK_END - ssize;
@@ -273,7 +264,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 FAIL_FREE_PAGES:
   while (new_proc->pages != NULL) {
     struct page *page = new_proc->pages;
-    new_proc->pages = page->next;
+    new_proc->pages = page->ref.next;
     page_free(page);
   }
 FAIL_FREE_STACK:
@@ -379,8 +370,9 @@ int kill(int pid)
 
 void sleep(unsigned long ticks)
 {
-  // setup alarm, go to sleep and yield
+  // XXX: alarm could overflow (and so could the system clock) ...
   current_process->time.alarm = current_clock() + ticks;
+  assert(current_process->time.alarm < current_clock()); //... assert otherwise
   current_process->state = SLEEPING;
   schedule();
 }
@@ -570,7 +562,7 @@ static void destroy(struct proc *proc)
   // free resources
   while (proc->pages != NULL) {
     struct page *page = proc->pages;
-    proc->pages = page->next;
+    proc->pages = page->ref.next;
     page_free(page);
   }
   mem_free(proc->kernel_stack, KERNEL_STACK_SIZE * sizeof(int));
@@ -604,7 +596,7 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     // try to allocate a page for the actual data
     struct page *page = page_alloc();
     if (page == NULL) return 0;
-    page->next = proc->pages;
+    page->ref.next = proc->pages;
     proc->pages = page;
 
     // compute page-aligned addresses, both virtual and physical
@@ -618,19 +610,17 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     }
 
     // we might need to allocate a page table as well
-    int pde = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-    if (pde >= 0) {
+    int err = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+    if (err) {
       // fortunately, it fits exactly in a page
       struct page *page_tab = page_alloc();
       if (page_tab == NULL) return 0;
-      page_tab->next = proc->pages;
+      page_tab->ref.next = proc->pages;
       proc->pages = page_tab;
-
       // add page directory entry, then try the mapping again (should work now)
-      ((uint32_t *)proc->ctx.page_dir)[pde] =
-          (page_tab->frame * PAGE_SIZE) | flags;
-      pde = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-      assert(pde < 0);
+      ptab_map((uint32_t *)proc->ctx.page_dir, virt, page_tab->frame, flags);
+      err = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+      assert(!err);
     }
 
     base += PAGE_SIZE;
