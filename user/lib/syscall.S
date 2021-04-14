@@ -123,3 +123,5 @@ DEFN_SYSCALL1(wait)
 DEFN_SYSCALL1(shm_create)
 DEFN_SYSCALL1(shm_acquire)
 DEFN_SYSCALL1(shm_release)
+
+DEFN_SYSCALL0(debug_me)

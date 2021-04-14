@@ -184,6 +184,8 @@ static void sys_shm_release(const char *key)
   shm_release(key);
 }
 
+static void sys_debug_me(void) {}
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -231,6 +233,7 @@ static const void *syscalls[] = {
     SYSCALL_ENTRY(shm_create),
     SYSCALL_ENTRY(shm_acquire),
     SYSCALL_ENTRY(shm_release),
+    SYSCALL_ENTRY(debug_me),
 };
 
 /*******************************************************************************

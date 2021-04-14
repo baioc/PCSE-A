@@ -42,6 +42,7 @@ int main(void)
 
         for (i = 0; i < TESTS_NUMBER; i++) {
                 printf("Test %s : ", tests[i]);
+                debug_me();
                 pid = start(tests[i], 4000, 128, NULL);
                 waitpid(pid, &ret);
                 assert(ret == 0);
