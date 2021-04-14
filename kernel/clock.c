@@ -14,6 +14,8 @@
 #include "cpu.h"
 #include "stdint.h"
 #include "interrupts.h"
+#include "stddef.h"
+#include "debug.h"
 
 /// Ticks the current process time, may end up calling the scheduler.
 extern void process_tick(void);
@@ -69,6 +71,8 @@ void clock_init(void)
 
 void clock_settings(unsigned long *quartz, unsigned long *ticks)
 {
+  assert(quartz != NULL);
+  assert(ticks != NULL);
   *quartz = QUARTZ_FREQ;
   *ticks = QUARTZ_FREQ / CLOCKFREQ;
 }
@@ -85,13 +89,8 @@ void wait_clock(unsigned long ticks)
 
 void clock_tick(void)
 {
-  // increment jiffies
   g_jiffies += 1;
-
-  // intr acknowledgement
   acknowledge_interrupt(0);
-
-  // increment process time
   process_tick();
 }
 
