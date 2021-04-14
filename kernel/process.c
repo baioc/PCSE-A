@@ -372,7 +372,7 @@ void sleep(unsigned long ticks)
 {
   // XXX: alarm could overflow (and so could the system clock) ...
   current_process->time.alarm = current_clock() + ticks;
-  assert(current_process->time.alarm < current_clock()); //... assert otherwise
+  assert(current_process->time.alarm >= current_clock()); //... assert otherwise
   current_process->state = SLEEPING;
   schedule();
 }
