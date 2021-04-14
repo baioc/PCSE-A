@@ -83,7 +83,7 @@
     nbr_sem++;
     return indice_list->id;
   }
-#define PTN(p) queue_add((p), &unused_sid, sid_queue, node_sid, prio)
+#define TEST(p) queue_add((p), &unused_sid, sid_queue, node_sid, prio)
   /*
   Delete the semaphore list_sem[sem] and free all the process in it list
   */
@@ -100,7 +100,7 @@
     queue_for_each(iterator, &used_sid, sid_queue, node_sid){
       if(iterator->id == sem){
         queue_del(iterator, node_sid);
-        PTN(iterator);//, &unused_sid, sid_queue, node_sid, prio);
+        TEST(iterator);//, &unused_sid, sid_queue, node_sid, prio);
         nbr_sem--;
         schedule();
         return 0;
