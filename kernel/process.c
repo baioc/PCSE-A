@@ -18,7 +18,6 @@
 #include "queue.h"
 #include "mem.h"
 #include "string.h"
-#include "stdbool.h"
 #include "clock.h"
 #include "userspace_apps.h"
 #include "interrupts.h"
@@ -57,10 +56,10 @@ extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
 // Kernel stack size, in words.
 #define KERNEL_STACK_SIZE 512
 
-/// Scheduling frequency in Hz, meaning a quantum has 1/SCHEDFREQ seconds.
+// Scheduling frequency in Hz, meaning a quantum has 1/SCHEDFREQ seconds.
 #define SCHEDFREQ 50
 
-/// Scheduling quantum, in tick units.
+// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
 
 /*******************************************************************************
@@ -177,15 +176,15 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 
   // make sure stack size calculation does not overflow and add padding
   const unsigned ssize_padding = 2 * sizeof(uint32_t);
-  if (ssize >= MMAP_STACK_END - ssize_padding) return -1;
+  if (ssize > MMAP_STACK_END - ssize_padding) return -1;
   ssize += ssize_padding;
 
-  // bail when we can't find a free slot in the process table
+  // bail out when we can't find a free slot in the process table
   if (queue_empty(&free_procs)) return -1;
   struct proc *new_proc = queue_bottom(&free_procs, struct proc, node);
 
   // otherwise start setting it up
-  new_proc->pid = new_proc - process_table; // calculate index from pointer
+  assert(new_proc->pid == new_proc - process_table);
   new_proc->priority = prio;
   new_proc->name = (char *)app->name;
 
@@ -209,7 +208,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
                                         PAGE_FLAGS_USER_RW);
   if (app_last == 0) goto FAIL_FREE_PAGES;
 
-  // set up shared memory at a 4MiB-aligned address
+  // set up shared memory after user data
   const uint32_t shm_end = shm_process_init(new_proc, app_last + 1);
   if (shm_end == 0) goto FAIL_FREE_PAGES;
 
@@ -219,7 +218,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   // we don't use the entire memory space, so heap and stack can't really
   // bump into each other, but we'll add the check anyway while making sure
   // there's at least one unmapped page between them (to catch stack overflows)
-  if (stack_first - PAGE_SIZE < shm_end) goto FAIL_FREE_PAGES;
+  if (stack_first - PAGE_SIZE <= shm_end) goto FAIL_FREE_PAGES;
   const uint32_t stack_last = mmap_region(new_proc,
                                           stack_first,
                                           MMAP_STACK_END - stack_first,
@@ -275,9 +274,7 @@ FAIL_FREE_STACK:
 int chprio(int pid, int newprio)
 {
   // process referenced by that pid doesn't exist, or newprio is invalid
-  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) {
-    return -1;
-  }
+  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) return -1;
 
   struct proc *proc = &process_table[pid];
   if (proc->state == DEAD || proc->state == ZOMBIE) return -1;
@@ -290,6 +287,7 @@ int chprio(int pid, int newprio)
   switch (proc->state) {
   case ACTIVE: { // check whether current process shouldn't be running anymore
     const struct proc *top = queue_top(&ready_procs, struct proc, node);
+    assert(top != NULL);
     if (current_process->priority < top->priority) schedule();
     break;
   }
@@ -348,8 +346,8 @@ int kill(int pid)
   struct proc *proc = &process_table[pid];
 
   switch (proc->state) {
-  case DEAD:   // invalid pid
-  case ZOMBIE: // can't kill what's already dead
+  case DEAD:
+  case ZOMBIE:
     return -1;
   case ACTIVE: // current process just killed itself :'( lets just exit
     exit(0);
@@ -497,13 +495,14 @@ CHECK_ALARM:
   }
 
   // process that will take control of the execution
-  assert(!queue_empty(&ready_procs));
   struct proc *take = queue_out(&ready_procs, struct proc, node);
+  assert(take != NULL);
   current_process = take;
   take->state = ACTIVE;
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
+  // NOTE: this always causes a TLB flush, and shm relies on this behaviour
   switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
@@ -610,8 +609,8 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     }
 
     // we might need to allocate a page table as well
-    int err = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-    if (err) {
+    int miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+    if (miss) {
       // fortunately, it fits exactly in a page
       struct page *page_tab = page_alloc();
       if (page_tab == NULL) return 0;
@@ -619,8 +618,8 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
       proc->pages = page_tab;
       // add page directory entry, then try the mapping again (should work now)
       ptab_map((uint32_t *)proc->ctx.page_dir, virt, page_tab->frame, flags);
-      err = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-      assert(!err);
+      miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+      assert(!miss);
     }
 
     base += PAGE_SIZE;

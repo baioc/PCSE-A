@@ -16,7 +16,8 @@ void uapps_init(void)
 	for (const struct uapps *uapp = symbols_table; uapp->name != NULL; ++uapp) {
 		assert(uapp->start != NULL);
 		assert(uapp->end != NULL);
-		hash_set(&g_uapps, (void *)uapp->name, (void *)uapp);
+		const int err = hash_set(&g_uapps, (void *)uapp->name, (void *)uapp);
+		assert(!err);
 	}
 }
 

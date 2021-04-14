@@ -5,7 +5,7 @@
 # 4(%esp) : old process context address
 # 8(%esp) : new process context address
 switch_context:
-	# we only need to save non-scratch regs
+	# save
 	movl 4(%esp), %eax
 	movl %ebx, 0(%eax)
 	movl %esp, 4(%eax)
@@ -16,7 +16,7 @@ switch_context:
 	movl %ecx, 20(%eax)
 	movl tss+4, %ecx # tss+4 : TSS.ESP0
 	movl %ecx, 24(%eax)
-	# load new process context
+	# load
 	movl 8(%esp), %eax
 	movl 0(%eax), %ebx
 	movl 4(%eax), %esp

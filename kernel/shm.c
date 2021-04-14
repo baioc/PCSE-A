@@ -67,7 +67,8 @@ void *shm_create(const char *key)
 
   // mark the shm page (and the key) as being in use
   frame->ref.count = 1;
-  hash_set(&shm_map, (void *)key, frame);
+  const int err = hash_set(&shm_map, (void *)key, frame);
+  assert(!err);
   proc->shm_free = proc->shm_free->ref.next;
 
   return (void *)page_share(proc, page, frame);
@@ -131,6 +132,7 @@ uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin)
   proc->shm_begin -= proc->shm_begin % (PAGE_SIZE * PAGE_TABLE_LENGTH);
 
   // allocate memory for the local page struct storage
+  // FIXME: this memory leak
   proc->shm_pages = mem_alloc(MAX_SHM_PAGES * sizeof(struct page));
   if (proc->shm_pages == NULL) return 0;
   proc->shm_used = NULL;
@@ -147,7 +149,7 @@ uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin)
     return 0;
   }
   shm_pgtab->ref.next = proc->pages;
-  proc->pages = shm_pgtab;
+  proc->pages = shm_pgtab; // will be freed when process dies
   uint32_t *pgdir = (uint32_t *)proc->ctx.page_dir;
   ptab_map(pgdir, proc->shm_begin, shm_pgtab->frame, PAGE_FLAGS_USER_RW);
 
@@ -172,6 +174,7 @@ static uint32_t page_share(struct proc *proc, struct page *restrict local,
   uint32_t *     pgdir = (uint32_t *)proc->ctx.page_dir;
   int            err = page_map(pgdir, virt, real, PAGE_FLAGS_USER_RW);
   assert(!err); // NOTE: we assume shared pages have their table already set up
+  schedule();   // ensures TLB flush after page_map
 
   return virt;
 }

@@ -84,8 +84,8 @@ int sdelete(int sem)
 {
   if (sem < 0 || sem >= MAXNBR_SEM || !list_sem[sem].in_use) return -1;
 
-  while (!queue_empty(&(list_sem[sem].list_blocked))) {
-    proc *p = queue_out(&(list_sem[sem].list_blocked), proc, node);
+  while (!queue_empty(&list_sem[sem].list_blocked)) {
+    proc *p = queue_out(&list_sem[sem].list_blocked, proc, node);
     assert(p->state == BLOCKED);
     p->sjustdelete = true;
     p->state = READY;
@@ -115,9 +115,8 @@ int signaln(int sem, short int count)
   bool sched = false;
   for (int i = 0; i < count; i++) {
     list_sem[sem].count += 1;
-    if (list_sem[sem].count <= 0) {
-      proc *p = queue_out(&(list_sem[sem].list_blocked), proc, node);
-      assert(p != NULL);
+    if (list_sem[sem].count <= 0 && !queue_empty(&list_sem[sem].list_blocked)) {
+      proc *p = queue_out(&list_sem[sem].list_blocked, proc, node);
       assert(p->state == BLOCKED);
       p->state = READY;
       set_ready(p);
@@ -134,8 +133,8 @@ int sreset(int sem, short int count)
   if (count < 0 || sem < 0 || sem >= MAXNBR_SEM || !list_sem[sem].in_use)
     return -1;
 
-  while (!queue_empty(&(list_sem[sem].list_blocked))) {
-    proc *p = queue_out(&(list_sem[sem].list_blocked), proc, node);
+  while (!queue_empty(&list_sem[sem].list_blocked)) {
+    proc *p = queue_out(&list_sem[sem].list_blocked, proc, node);
     assert(p->state == BLOCKED);
     p->sjustreset = true;
     p->state = READY;
