@@ -130,6 +130,9 @@ static int proc_16_3_msg(void *arg);
 static int proc_return(void *arg);
 static int test_17_msg(void *arg);
 
+static int test_20(void *arg);
+static int launch_philo(void *arg);
+
 static int test_21(void *arg);
 static int shm_checker(void *arg);
 /*******************************************************************************
@@ -185,7 +188,6 @@ if(true == false){
   waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
   waitpid(pid, NULL);
-  }
   pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
   waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
@@ -193,6 +195,9 @@ if(true == false){
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
+  waitpid(pid, NULL);
+}
+  pid = start(test_20, 0, 128, "test_20", 0);
   waitpid(pid, NULL);
   pid = start(test_21, 0, 128, "test_21", 0);
   waitpid(pid, NULL);
@@ -2008,7 +2013,187 @@ static int test_16_msg(void *arg)
 /*-----------------*
  *      Test 20
  *-----------------*/
-// TODO: Add test_20 when semaphore and shared memory are available
+#define NR_PHILO 5
+
+ struct philo {
+         char f[NR_PHILO]; /* tableau des fourchettes, contient soit 1 soit 0 selon si elle
+                              est utilisee ou non */
+         char bloque[NR_PHILO]; /* memorise l'etat du philosophe, contient 1 ou 0 selon que le philosophe
+                                   est en attente d'une fourchette ou non */
+         /* Padding pour satisfaire un compilateur strict. */
+         char padding[sizeof(int) - (NR_PHILO * 2) % sizeof(int)];
+         union sem mutex_philo; /* exclusion mutuelle */
+         union sem s[NR_PHILO]; /* un semaphore par philosophe */
+         int etat[NR_PHILO];
+ };
+
+ static int test_20(void *arg)
+ {
+         int j, pid;
+         struct philo *p;
+
+         (void)arg;
+
+         p = (struct philo*) shm_create("shm_philo");
+         assert(p != (void*)0);
+
+         xscreate(&p->mutex_philo); /* semaphore d'exclusion mutuelle */
+         xsignal(&p->mutex_philo);
+         for (j = 0; j < NR_PHILO; j++) {
+                 xscreate(p->s + j); /* semaphore de bloquage des philosophes */
+                 p->f[j] = 0;
+                 p->bloque[j] = 0;
+                 p->etat[j] = '-';
+         }
+
+         printf("\n");
+         pid = start(launch_philo, 4000, 193, "launch_philo", 0);
+         assert(pid > 0);
+         assert(waitpid(pid, 0) == pid);
+         printf("\n");
+         xsdelete(&p->mutex_philo);
+         for (j = 0; j < NR_PHILO; j++) {
+                 xsdelete(p->s + j);
+         }
+         shm_release("shm_philo");
+         return 0;
+ }
+
+ static void affiche_etat(struct philo *p)
+ {
+         int i;
+         printf("%c", 13);
+         for (i=0; i<NR_PHILO; i++) {
+                 unsigned long c;
+                 switch (p->etat[i]) {
+                         case 'm':
+                                 c = 2;
+                                 break;
+                         default:
+                                 c = 4;
+                 }
+                 (void)c;
+                 printf("%c", p->etat[i]);
+         }
+ }
+
+ static void waitloop(void)
+ {
+         int j;
+         for (j = 0; j < 5000; j++) {
+                 int l;
+                 test_it();
+                 for (l = 0; l < 5000; l++);
+         }
+ }
+
+ static void penser(struct philo *p, long i)
+ {
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = 'p';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         waitloop();
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static void manger(struct philo *p, long i)
+ {
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = 'm';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         waitloop();
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static int test(struct philo *p, int i)
+ {
+         /* les fourchettes du philosophe i sont elles libres ? */
+         return ((!p->f[i] && (!p->f[(i + 1) % NR_PHILO])));
+ }
+
+ static void prendre_fourchettes(struct philo *p, int i)
+ {
+         /* le philosophe i prend des fourchettes */
+
+         xwait(&p->mutex_philo); /* Debut SC */
+
+         if (test(p, i)) {  /* on tente de prendre 2 fourchette */
+                 p->f[i] = 1;
+                 p->f[(i + 1) % NR_PHILO] = 1;
+                 xsignal(&p->s[i]);
+         } else
+                 p->bloque[i] = 1;
+
+         xsignal(&p->mutex_philo); /* FIN SC */
+         xwait(&p->s[i]); /* on attend au cas o on ne puisse pas prendre 2 fourchettes */
+ }
+
+ static void poser_fourchettes(struct philo *p, int i)
+ {
+
+         xwait(&p->mutex_philo); /* DEBUT SC */
+
+         if ((p->bloque[(i + NR_PHILO - 1) % NR_PHILO]) && (!p->f[(i + NR_PHILO - 1) % NR_PHILO])) {
+                 p->f[(i + NR_PHILO - 1) % NR_PHILO] = 1;
+                 p->bloque[(i + NR_PHILO - 1) % NR_PHILO] = 0;
+                 xsignal(&p->s[(i + NR_PHILO - 1) % NR_PHILO]);
+         } else
+                 p->f[i] = 0;
+
+         if ((p->bloque[(i + 1) % NR_PHILO]) && (!p->f[(i + 2) % NR_PHILO])) {
+                 p->f[(i + 2) % NR_PHILO] = 1;
+                 p->bloque[(i + 1) % NR_PHILO] = 0;
+                 xsignal(&p->s[(i + 1) % NR_PHILO]);
+         } else
+                 p->f[(i + 1) % NR_PHILO] = 0;
+
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static int philosophe(void *arg)
+ {
+         /* comportement d'un seul philosophe */
+         int i = (int) arg;
+         int k;
+         struct philo *p;
+
+         p = shm_acquire("shm_philo");
+         assert(p != (void*)0);
+
+         for (k = 0; k < 6; k++) {
+                 prendre_fourchettes(p, i); /* prend 2 fourchettes ou se bloque */
+                 manger(p, i); /* le philosophe mange */
+                 poser_fourchettes(p, i); /* pose 2 fourchettes */
+                 penser(p, i); /* le philosophe pense */
+         }
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         shm_release("shm_philo");
+         return 0;
+ }
+
+ static int launch_philo(void *arg)
+ {
+         int i, pid;
+
+         (void)arg;
+
+         for (i = 0; i < NR_PHILO; i++) {
+                 pid = start(philosophe, 4000, 192, "philosophe", (void *) i);
+                 assert(pid > 0);
+         }
+         return 0;
+ }
 
 /*-----------------*
  *      Test 21
