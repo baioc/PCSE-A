@@ -67,16 +67,6 @@
     if(nbr_sem == MAXNBR_SEM || count < 0) return -1;
     sid_queue *indice_list = queue_out(&unused_sid, sid_queue, node_sid);
     queue_add(indice_list, &used_sid, sid_queue, node_sid, prio);
-    // //Looking for a blank place to create the semaphore
-    // int i = 0;
-    // // We should find a better way to detect if a semaphore isn't initialized
-    // while(list_sem[i].sid == i){
-    //   i++;
-    // }
-    // list_sem[i].sid = i;
-    // list_sem[i].count = count;
-    // list_sem[i].list_blocked = (link)LIST_HEAD_INIT(list_sem[i].list_blocked);
-    // return i;
     list_sem[indice_list->id].sid = indice_list->id;
     list_sem[indice_list->id].count = count;
     list_sem[indice_list->id].list_blocked = (link)LIST_HEAD_INIT(list_sem[indice_list->id].list_blocked);
@@ -107,11 +97,6 @@
       }
     }
     return -1;
-    // list_sem[sem].sid = -1;
-    // list_sem[sem].count = -1;
-
-    // schedule();
-    // return 0;
   }
 
   /*

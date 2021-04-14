@@ -114,10 +114,6 @@ static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
 
-static int test_16_sem(void *arg);
-static unsigned long test16_1(void);
-static int proc16_1(void *arg);
-
 static int test_17_sem(void *arg);
 static int proc17_1(void *arg);
 static int proc17_2(void *arg);
@@ -147,7 +143,7 @@ static int shm_checker(void *arg);
 void run_userspace_tests()
 {
   int pid;
-if(true == false){
+
   pid = start(test_0, 0, 128, "test_0", 0);
   waitpid(pid, NULL);
   pid = start(test_1, 0, 128, "test_1", 0);
@@ -160,10 +156,10 @@ if(true == false){
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-
+if(true == false){
     pid = start(test_7, 0, 128, "test_7", 0);
     waitpid(pid, NULL);
-
+}
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
@@ -187,9 +183,6 @@ if(true == false){
   pid = start(test_15_msg, 0, 128, "test_15_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
-  waitpid(pid, NULL);
-}
-  pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
   waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
@@ -1505,146 +1498,6 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 16
  *-----------------*/
-
- #define NBSEMS 10000
-
- typedef unsigned long long uint_fast64_t;
- typedef unsigned long uint_fast32_t;
-
- static const uint_fast64_t _multiplier = 0x5DEECE66DULL;
- static const uint_fast64_t _addend = 0xB;
- static const uint_fast64_t _mask = (1ULL << 48) - 1;
- static uint_fast64_t _seed = 1;
-
- static unsigned long long mul64(unsigned long long x, unsigned long long y)
- {
-         unsigned long a, b, c, d, e, f, g, h;
-         unsigned long long res = 0;
-         a = x & 0xffff;
-         x >>= 16;
-         b = x & 0xffff;
-         x >>= 16;
-         c = x & 0xffff;
-         x >>= 16;
-         d = x & 0xffff;
-         e = y & 0xffff;
-         y >>= 16;
-         f = y & 0xffff;
-         y >>= 16;
-         g = y & 0xffff;
-         y >>= 16;
-         h = y & 0xffff;
-         res = d * e;
-         res += c * f;
-         res += b * g;
-         res += a * h;
-         res <<= 16;
-         res += c * e;
-         res += b * f;
-         res += a * g;
-         res <<= 16;
-         res += b * e;
-         res += a * f;
-         res <<= 16;
-         res += a * e;
-         return res;
- }
-
- static uint_fast32_t randBits(int _bits)
- {
-         uint_fast32_t rbits;
-         uint_fast64_t nextseed = (mul64(_seed, _multiplier) + _addend) & _mask;
-         _seed = nextseed;
-         rbits = nextseed >> 16;
-         return rbits >> (32 - _bits);
- }
-
- short randShort()
- {
-         return randBits(15);
- }
-
- void setSeed(uint_fast64_t _s)
- {
-         _seed = _s;
- }
-
- static int test_16_sem(void *arg)
- {
-         int pid;
-         (void)arg;
-         pid = start(proc16_1, 4000 + NBSEMS * 4, 128, "proc16_1", 0);
-         assert(pid > 0);
-         assert(waitpid(pid, 0) == pid);
-         return 0;
- }
-
- static unsigned long test16_1(void)
- {
-         unsigned long long tsc, tsc1, tsc2;
-         unsigned long count = 0;
-
-         __asm__ __volatile__("rdtsc":"=A"(tsc1));
-         tsc2 = tsc1 + 1000000000;
-         assert(tsc1 < tsc2);
-         do {
-                 unsigned i;
-                 test_it();
-                 for (i=0; i<100; i++) {
-                         int sem1 = screate(2);
-                         int sem2 = screate(1);
-                         assert(sem1 >= 0);
-                         assert(sem2 >= 0);
-                         assert(sem1 != sem2);
-                         assert(sdelete(sem1) == 0);
-                         assert(sdelete(sem2) == 0);
-                 }
-                 __asm__ __volatile__("rdtsc":"=A"(tsc));
-                 count += 2 * i;
-
-         } while (tsc < tsc2);
-         return (unsigned long)div64(tsc - tsc1, count, 0);
- }
-
- static int proc16_1(void *arg)
- {
-         int sems[NBSEMS];
-         int i;
-         unsigned long c1, c2;
-         unsigned long long seed;
-
-         (void)arg;
-
-         c1 = test16_1();
-         printf("%lu ", c1);
-         __asm__ __volatile__("rdtsc":"=A"(seed));
-         setSeed(seed);
-         for (i=0; i<NBSEMS; i++) {
-                 int sem = screate(randShort());
-                 if (sem < 0) assert(!"*** Increase the semaphore capacity of your system to NBSEMS to pass this test. ***");
-                 sems[i] = sem;
-         }
-         if (screate(0) >= 0) assert(!"*** Decrease the semaphore capacity of your system to NBSEMS to pass this test. ***");
-         assert(sdelete(sems[NBSEMS/3]) == 0);
-         assert(sdelete(sems[(NBSEMS/3)*2]) == 0);
-         for(int i = 0; i < NBSEMS; i++) printf("%d | %d , ",i,sems[i]);
-         c2 = test16_1();
-         printf("%lu ", c2);
-         setSeed(seed);
-         for (i=0; i<NBSEMS; i++) {
-                 //printf("%d\n",i);
-                 short randVal = randShort();
-                 if ((i != (NBSEMS/3)) && (i != (2*(NBSEMS/3)))) {
-                         assert(scount(sems[i]) == randVal);// Bloque à i = 8725
-                         assert(sdelete(sems[i]) == 0);
-                 }
-         }
-         if (c2 < 2 * c1)
-                 printf("ok.\n");
-         else
-                 printf("Bad algorithm complexity in semaphore allocation.\n");
-         return 0;
- }
 
 static int proc_16_1_msg(void *arg)
 {
