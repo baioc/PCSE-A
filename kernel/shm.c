@@ -148,10 +148,10 @@ uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin)
   }
   shm_pgtab->ref.next = proc->pages;
   proc->pages = shm_pgtab;
-  uint32_t *pgdir = (uint32_t*)proc->ctx.page_dir;
+  uint32_t *pgdir = (uint32_t *)proc->ctx.page_dir;
   ptab_map(pgdir, proc->shm_begin, shm_pgtab->frame, PAGE_FLAGS_USER_RW);
 
-  return proc->shm_begin + PAGE_SIZE*MAX_SHM_PAGES - 1;
+  return proc->shm_begin + PAGE_SIZE * MAX_SHM_PAGES - 1;
 }
 
 /*******************************************************************************

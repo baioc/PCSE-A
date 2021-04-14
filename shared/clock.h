@@ -5,10 +5,10 @@
 #define CLOCKFREQ 100
 
 // Converts time from MS miliseconds to tick units.
-#define MS_TO_TICKS(ms) ((ms) * CLOCKFREQ / 1000)
+#define MS_TO_TICKS(ms) ((ms)*CLOCKFREQ / 1000)
 
 // Converts time from TS kernel ticks to milisecond units.
-#define TICKS_TO_MS(ts) ((ts) * 1000 / CLOCKFREQ)
+#define TICKS_TO_MS(ts) ((ts)*1000 / CLOCKFREQ)
 
 /**
  * Writes to output parameters the internal quartz oscillator frequency and

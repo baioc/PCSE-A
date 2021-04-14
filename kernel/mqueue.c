@@ -33,15 +33,15 @@
 typedef struct proc proc;
 
 struct message_queue {
-  int  fid;
-  bool in_use;
+  int                   fid;
+  bool                  in_use;
   struct message_queue *next;
 
   // FIFO buffer and its related fields
   int *buffer;
-  int  lenght; // buffer capacity
-  int  nb_send; // used slots
-  int  id_send; // back index
+  int  lenght;      // buffer capacity
+  int  nb_send;     // used slots
+  int  id_send;     // back index
   int  id_received; // front index
 
   // blocked processes
@@ -120,7 +120,8 @@ int psend(int fid, int message)
   {
     // send message and yield to the highest-priority waiting proccess
     sending_message(fid, message);
-    proc *p_to_receive = queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
+    proc *p_to_receive =
+        queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
     assert(p_to_receive->state == AWAITING_IO);
     assert(p_to_receive->m_queue_fid == fid);
     receiving_message(fid, (int *)p_to_receive->message);
@@ -138,7 +139,8 @@ int psend(int fid, int message)
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
-    queue_add(active_process, &queue_tab[fid].waiting_to_send, proc, node, priority);
+    queue_add(
+        active_process, &queue_tab[fid].waiting_to_send, proc, node, priority);
     schedule();
 
     // check whether we unblocked because the queue was actually reset/deleted
@@ -186,7 +188,11 @@ int preceive(int fid, int *message)
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
-    queue_add(active_process, &queue_tab[fid].waiting_to_receive, proc, node, priority);
+    queue_add(active_process,
+              &queue_tab[fid].waiting_to_receive,
+              proc,
+              node,
+              priority);
     schedule();
 
     // check whether we unblocked because the queue was actually reset/deleted
