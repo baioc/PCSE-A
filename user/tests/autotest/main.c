@@ -14,22 +14,22 @@ const char *tests[] = {
         "test4",
         "test5",
         "test6",
-        // "test7",
+        // "test7", // FIXME
         "test8",
-        // "test9",
-        // "test10",
-        // "test11",
-        // "test12",
-        // "test13",
-        // "test14",
-        // "test15",
-        // "test16",
-        // "test17",
+        // "test9", // FIXME
+        "test10",
+        "test11",
+        // "test12", // FIXME
+        // "test13", // FIXME
+        // "test14", // FIXME
+        "test15",
+        "test16",
+        "test17",
         "test18",
-        // "test19",
-        // "test20",
-        // "test21",
-        // "test22",
+        // "test19", // FIXME
+        // "test20", // FIXME
+        // "test21", // FIXME
+        // "test22", // FIXME
 };
 
 #define TESTS_NUMBER ((int)(sizeof(tests) / sizeof(tests[0])))
@@ -42,6 +42,7 @@ int main(void)
 
         for (i = 0; i < TESTS_NUMBER; i++) {
                 printf("Test %s : ", tests[i]);
+                debug_me();
                 pid = start(tests[i], 4000, 128, NULL);
                 waitpid(pid, &ret);
                 assert(ret == 0);

@@ -16,5 +16,23 @@
 #define NR_kill           10
 #define NR_start          11
 #define NR_waitpid        12
+#define NR_pcount         13
+#define NR_pcreate        14
+#define NR_pdelete        15
+#define NR_preceive       16
+#define NR_preset         17
+#define NR_psend          18
+#define NR_scount         19
+#define NR_screate        20
+#define NR_sdelete        21
+#define NR_sreset         22
+#define NR_signal         23
+#define NR_signaln        24
+#define NR_try_wait       25
+#define NR_wait           26
+#define NR_shm_create     27
+#define NR_shm_acquire    28
+#define NR_shm_release    29
+#define NR_debug_me       30 /* TODO: remove this after debugs */
 
 #endif // _SYSCALL_H_

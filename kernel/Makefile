@@ -78,7 +78,7 @@ DIRS := . boot
 SRC  :=	\
 	$(call all-asm-files-under, $(DIRS)) \
 	$(call all-c-files-under , $(DIRS))
-INCLUDES := $(addprefix -I, $(DIRS) ../shared ./tests)
+INCLUDES := $(addprefix -I, $(DIRS) ../shared)
 
 ### Output files ###
 DEPS        := $(addprefix $(OUTPUT)/, $(call generate-deps, $(SRC)))
@@ -103,13 +103,8 @@ include build/kbd-linux.mk
 ### Generate object files for userspace binaries ###
 include build/apps-integration.mk
 
-### Generate object files for kernel testing ###
-### Comment the two next lines if you want to skip tests building ###
-TESTS_DIR := tests
-include build/tests.mk
-
 ### Generate the kernel, ready to run ###
-kernel.bin: build/kernel.lds $(OBJS) $(TESTS_OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET)
+kernel.bin: build/kernel.lds $(OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET)
 	$(LD) $(LDFLAGS) -e entry -T$< $(filter-out %.lds, $^) -o $@
 
 ### insert the kernel in an iso file (cdrom) suitable for bochs and USB key
@@ -140,16 +135,6 @@ $(OUTPUT)/%.o: %.c | $(OUTPUT)
 
 $(OUTPUT)/%.o: %.S | $(OUTPUT)
 	$(AS) $(ASFLAGS) $(INCLUDES) -c $< -o $@
-
-# Always rebuild start.c so that KERNEL_TEST macro is taken into account
-.PHONY: $(OUTPUT)/start.o
-$(OUTPUT)/start.o: start.c | $(OUTPUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-# Always rebuild process.c so that KERNEL_TEST macro is taken into account
-.PHONY: $(OUTPUT)/process.o
-$(OUTPUT)/process.o: process.c | $(OUTPUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # A text screen for exception dump
 $(OUTPUT)/task_dump_screen.o: $(OUTPUT)/empty.o task_dump_screen.txt
