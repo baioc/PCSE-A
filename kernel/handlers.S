@@ -97,6 +97,11 @@ syscall_handler:
 	pushl %ecx
 	pushl %ebx
 	pushl %eax
-	call do_syscall /* return code is in EAX */
-	add $(6*4), %esp /* remember to restore stack frame */
+	call do_syscall
+	add $4, %esp /* eax */
+	popl %ebx
+	popl %ecx
+	popl %edx
+	popl %esi
+	popl %edi
 	iret

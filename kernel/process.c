@@ -417,7 +417,7 @@ int waitpid(int pid, int *retvalp)
 
 void divide_error(void)
 {
-  printf("Error [%s%%%i]: Divide by zero\n",
+  printf("  Error [%s%%%i]: Divide by zero\n",
          current_process->name,
          current_process->pid);
   exit(0);
@@ -425,7 +425,7 @@ void divide_error(void)
 
 void protection_exception(void)
 {
-  printf("Error [%s%%%i]: General protection fault\n",
+  printf("  Error [%s%%%i]: General protection fault\n",
          current_process->name,
          current_process->pid);
   exit(0);
@@ -433,7 +433,7 @@ void protection_exception(void)
 
 void page_fault(void)
 {
-  printf("Error [%s%%%i]: Page fault\n",
+  printf("  Error [%s%%%i]: Page fault\n",
          current_process->name,
          current_process->pid);
   exit(0);
