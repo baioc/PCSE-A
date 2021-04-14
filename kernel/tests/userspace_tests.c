@@ -188,6 +188,7 @@ if(true == false){
   waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
   waitpid(pid, NULL);
+}
   pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
   waitpid(pid, NULL);
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
@@ -196,7 +197,6 @@ if(true == false){
   waitpid(pid, NULL);
   pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
   waitpid(pid, NULL);
-}
   pid = start(test_20, 0, 128, "test_20", 0);
   waitpid(pid, NULL);
   pid = start(test_21, 0, 128, "test_21", 0);
