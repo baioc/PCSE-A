@@ -17,13 +17,14 @@
 #include "mem.h"
 #include "queue.h"
 #include "stdbool.h"
+#include "stdint.h"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
 /// Total number of message queues.
-#define NBQUEUE 200
+#define NBQUEUE 256
 
 /*******************************************************************************
  * Types
@@ -34,19 +35,18 @@ typedef struct proc proc;
 struct message_queue {
   int  fid;
   bool in_use;
+  struct message_queue *next;
 
   // FIFO buffer and its related fields
   int *buffer;
-  int  lenght;
-  int  nb_send;
-  int  id_send;
-  int  id_received;
+  int  lenght; // buffer capacity
+  int  nb_send; // used slots
+  int  id_send; // back index
+  int  id_received; // front index
 
   // blocked processes
   link waiting_to_send;
   link waiting_to_receive;
-
-  struct message_queue *next;
 };
 
 /*******************************************************************************
@@ -81,7 +81,7 @@ void mq_init(void)
   unused_queues = NULL;
   for (int i = NBQUEUE - 1; i >= 0; --i) {
     struct message_queue *mq = &queue_tab[i];
-    *mq = (struct message_queue){.fid = i};
+    mq->fid = i;
     mq->next = unused_queues;
     unused_queues = mq;
     mq->in_use = false;
@@ -90,29 +90,24 @@ void mq_init(void)
 
 int pcreate(int count)
 {
-  if (count <= 0 || unused_queues == NULL) return -1;
+  if (count <= 0 || count > INT32_MAX / (int)sizeof(int)) return -1;
+  if (unused_queues == NULL) return -1;
 
-  // get the first unused queue
-  const int fid = unused_queues->fid;
-  assert(&queue_tab[fid] == unused_queues);
-
-  // we initialize the new message queue
-  queue_tab[fid].buffer = mem_alloc(sizeof(int) * count);
-  if (queue_tab[fid].buffer == NULL) return -1;
-  queue_tab[fid].lenght = count;
-  queue_tab[fid].nb_send = 0;
-  queue_tab[fid].id_send = -1;
-  queue_tab[fid].id_received = -1;
-  queue_tab[fid].waiting_to_send =
-      (link)LIST_HEAD_INIT(queue_tab[fid].waiting_to_send);
-  queue_tab[fid].waiting_to_receive =
-      (link)LIST_HEAD_INIT(queue_tab[fid].waiting_to_receive);
+  struct message_queue *mq = unused_queues;
+  mq->buffer = mem_alloc(sizeof(int) * count);
+  if (mq->buffer == NULL) return -1;
+  mq->lenght = count;
+  mq->nb_send = 0;
+  mq->id_send = 0;
+  mq->id_received = 0;
+  mq->waiting_to_send = (link)LIST_HEAD_INIT(mq->waiting_to_send);
+  mq->waiting_to_receive = (link)LIST_HEAD_INIT(mq->waiting_to_receive);
 
   // remove queue from free list
   unused_queues = unused_queues->next;
-  queue_tab[fid].in_use = true;
+  mq->in_use = true;
 
-  return fid;
+  return mq->fid;
 }
 
 int psend(int fid, int message)
@@ -125,27 +120,25 @@ int psend(int fid, int message)
   {
     // send message and yield to the highest-priority waiting proccess
     sending_message(fid, message);
-    proc *p_to_receive =
-        queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
-    receiving_message(fid, (int *)p_to_receive->message);
+    proc *p_to_receive = queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
     assert(p_to_receive->state == AWAITING_IO);
     assert(p_to_receive->m_queue_fid == fid);
+    receiving_message(fid, (int *)p_to_receive->message);
     p_to_receive->state = READY;
     set_ready(p_to_receive);
     schedule();
   }
 
   // else if the queue is full
-  else if (queue_tab[fid].nb_send == queue_tab[fid].lenght)
+  else if (queue_tab[fid].nb_send >= queue_tab[fid].lenght)
   {
     // block current process until someone wants to listen
     proc *active_process = get_current_process();
-    active_process->message = message;
+    active_process->message = (void *)message;
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
-    queue_add(
-        active_process, &queue_tab[fid].waiting_to_send, proc, node, priority);
+    queue_add(active_process, &queue_tab[fid].waiting_to_send, proc, node, priority);
     schedule();
 
     // check whether we unblocked because the queue was actually reset/deleted
@@ -176,7 +169,7 @@ int preceive(int fid, int *message)
     proc *p_to_send = queue_out(&queue_tab[fid].waiting_to_send, proc, node);
     assert(p_to_send->state == AWAITING_IO);
     assert(p_to_send->m_queue_fid == fid);
-    sending_message(fid, p_to_send->message);
+    sending_message(fid, (int)p_to_send->message);
 
     // and then unblock that process
     p_to_send->state = READY;
@@ -189,15 +182,11 @@ int preceive(int fid, int *message)
   {
     // block current process until someone wants to send a message
     proc *active_process = get_current_process();
-    active_process->message = (int)message;
+    active_process->message = (void *)message;
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
-    queue_add(active_process,
-              &queue_tab[fid].waiting_to_receive,
-              proc,
-              node,
-              priority);
+    queue_add(active_process, &queue_tab[fid].waiting_to_receive, proc, node, priority);
     schedule();
 
     // check whether we unblocked because the queue was actually reset/deleted
@@ -240,8 +229,8 @@ int preset(int fid)
 
   // reset buffer indexes
   queue_tab[fid].nb_send = 0;
-  queue_tab[fid].id_send = -1;
-  queue_tab[fid].id_received = -1;
+  queue_tab[fid].id_send = 0;
+  queue_tab[fid].id_received = 0;
 
   // yield in case there were higher priority process waiting
   schedule();
@@ -259,16 +248,16 @@ int pcount(int fid, int *count)
     proc *iterator;
     queue_for_each(iterator, &queue_tab[fid].waiting_to_receive, proc, node)
     {
-      value++;
+      value -= 1;
     }
-    *count = -value;
+    *count = value;
 
   } else if (!queue_empty(&queue_tab[fid].waiting_to_send)) {
     int   value = queue_tab[fid].nb_send;
     proc *iterator;
     queue_for_each(iterator, &queue_tab[fid].waiting_to_send, proc, node)
     {
-      value++;
+      value += 1;
     }
     *count = value;
 
@@ -283,14 +272,13 @@ void mq_changing_proc_prio(proc *p)
 {
   assert(p->state == AWAITING_IO);
   assert(valid_fid(p->m_queue_fid));
-  if (queue_empty(&queue_tab[p->m_queue_fid].waiting_to_send)) {
+  struct message_queue *mq = &queue_tab[p->m_queue_fid];
+  if (queue_empty(&mq->waiting_to_send)) {
     queue_del(p, node);
-    queue_add(
-        p, &queue_tab[p->m_queue_fid].waiting_to_receive, proc, node, priority);
+    queue_add(p, &mq->waiting_to_receive, proc, node, priority);
   } else {
     queue_del(p, node);
-    queue_add(
-        p, &queue_tab[p->m_queue_fid].waiting_to_send, proc, node, priority);
+    queue_add(p, &mq->waiting_to_send, proc, node, priority);
   }
 }
 
@@ -306,28 +294,29 @@ static inline bool valid_fid(int fid)
 static void sending_message(int fid, int message)
 {
   assert(valid_fid(fid));
-  queue_tab[fid].nb_send++;
-  assert(queue_tab[fid].nb_send <= queue_tab[fid].lenght);
-  queue_tab[fid].id_send = (queue_tab[fid].id_send + 1) % queue_tab[fid].lenght;
-  queue_tab[fid].buffer[queue_tab[fid].id_send] = message;
+  struct message_queue *mq = &queue_tab[fid];
+  assert(mq->nb_send < mq->lenght);
+  assert(mq->id_send >= 0 && mq->id_send < mq->lenght);
+  mq->buffer[mq->id_send] = message;
+  mq->id_send = (mq->id_send + 1) % mq->lenght;
+  mq->nb_send++;
 }
 
 static void receiving_message(int fid, int *message)
 {
   assert(valid_fid(fid));
-  assert(queue_tab[fid].nb_send > 0);
-  queue_tab[fid].nb_send--;
-  queue_tab[fid].id_received =
-      (queue_tab[fid].id_received + 1) % queue_tab[fid].lenght;
-  if (message != NULL)
-    *message = queue_tab[fid].buffer[queue_tab[fid].id_received];
+  struct message_queue *mq = &queue_tab[fid];
+  assert(mq->nb_send > 0);
+  assert(mq->id_received >= 0 && mq->id_received < mq->lenght);
+  if (message != NULL) *message = mq->buffer[mq->id_received];
+  mq->id_received = (mq->id_received + 1) % mq->lenght;
+  mq->nb_send--;
 }
 
 static void remove_waiting_processes(int fid)
 {
-  // All the processes wainting to send or to receive a message are
-  // freed. They have a negative return value from psend or preceive.
   assert(valid_fid(fid));
+
   while (!queue_empty(&queue_tab[fid].waiting_to_send)) {
     proc *blocked_send = queue_out(&queue_tab[fid].waiting_to_send, proc, node);
     assert(blocked_send->state == AWAITING_IO);
@@ -336,6 +325,7 @@ static void remove_waiting_processes(int fid)
     blocked_send->state = READY;
     set_ready(blocked_send);
   }
+
   while (!queue_empty(&queue_tab[fid].waiting_to_receive)) {
     proc *blocked_receive =
         queue_out(&queue_tab[fid].waiting_to_receive, proc, node);

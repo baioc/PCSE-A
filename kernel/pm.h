@@ -19,8 +19,6 @@
  * Macros
  ******************************************************************************/
 
-#define MAX_SHM_PAGES sizeof(unsigned)
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -74,9 +72,10 @@ struct proc {
   struct page *pages;
 
   // user shared memory
-  uint32_t     shm_begin;
+  struct page *shm_used;
   struct page *shm_free;
-  struct page  shm_pages[MAX_SHM_PAGES];
+  uint32_t     shm_begin;
+  struct page *shm_pages;
 
   // semaphore-related fields
   int  sid;         // id of the semaphore blocking it (if BLOCKED)
@@ -84,9 +83,9 @@ struct proc {
   bool sjustdelete; // whether sem was deleted
 
   // message queue-related fields
-  int  message;     // message being sent/received
-  int  m_queue_fid; // queue in which the process is blocked, if any
-  bool m_queue_rd;  // whether the queue was deleted/reset
+  void *message;     // message being sent/received
+  int   m_queue_fid; // queue in which the process is blocked, if any
+  bool  m_queue_rd;  // whether the queue was deleted/reset
 };
 
 /*******************************************************************************

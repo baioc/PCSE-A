@@ -21,7 +21,7 @@
  * Macros
  ******************************************************************************/
 
-#define MAXNBR_SEM 500
+#define MAXNBR_SEM 512
 
 /*******************************************************************************
  * Types
@@ -57,9 +57,11 @@ void sem_init(void)
 {
   free_list = NULL;
   for (int i = MAXNBR_SEM - 1; i >= 0; --i) {
-    list_sem[i] = (struct semaph){.sid = i, .in_use = false};
-    list_sem[i].next = free_list;
-    free_list = &list_sem[i];
+    struct semaph *sem = &list_sem[i];
+    sem->sid = i;
+    sem->in_use = false;
+    sem->next = free_list;
+    free_list = sem;
   }
 }
 
@@ -72,7 +74,6 @@ int screate(short int count)
   free_list = free_list->next;
   sem->in_use = true;
 
-  sem->sid = sem - list_sem;
   sem->count = count;
   sem->list_blocked = (link)LIST_HEAD_INIT(sem->list_blocked);
 
@@ -111,18 +112,19 @@ int signaln(int sem, short int count)
   const unsigned short new_count = (unsigned short)list_sem[sem].count + count;
   if (count < 0 || new_count < list_sem[sem].count) return -2;
 
+  bool sched = false;
   for (int i = 0; i < count; i++) {
     list_sem[sem].count += 1;
     if (list_sem[sem].count <= 0) {
-      assert(!queue_empty(&(list_sem[sem].list_blocked)));
       proc *p = queue_out(&(list_sem[sem].list_blocked), proc, node);
+      assert(p != NULL);
       assert(p->state == BLOCKED);
       p->state = READY;
       set_ready(p);
+      sched = true;
     }
   }
-
-  schedule();
+  if (sched) schedule();
 
   return 0;
 }
@@ -158,12 +160,12 @@ int wait(int sem)
   p->sjustreset = false;
   p->sjustdelete = false;
   p->state = BLOCKED;
-  queue_add(p, &(list_sem[sem].list_blocked), proc, node, priority);
+  queue_add(p, &list_sem[sem].list_blocked, proc, node, priority);
   schedule();
 
   // check whether we unblocked because of a delete/reset
-  if (get_current_process()->sjustdelete == 1) return -3;
-  if (get_current_process()->sjustreset == 1) return -4;
+  if (get_current_process()->sjustdelete) return -3;
+  if (get_current_process()->sjustreset) return -4;
 
   return 0;
 }
@@ -185,7 +187,7 @@ int try_wait(int sem)
 int scount(int sem)
 {
   if (sem < 0 || sem >= MAXNBR_SEM || !list_sem[sem].in_use) return -1;
-  return (unsigned int)list_sem[sem].count & 0x0000ffff;
+  return ((unsigned int)list_sem[sem].count) & 0x0000ffff;
 }
 
 void sem_changing_proc_prio(proc *p)
@@ -193,7 +195,7 @@ void sem_changing_proc_prio(proc *p)
   assert(p->state == BLOCKED);
   assert(p->sid >= 0 && p->sid < MAXNBR_SEM && list_sem[p->sid].in_use);
   queue_del(p, node);
-  queue_add(p, &(list_sem[p->sid].list_blocked), proc, node, priority);
+  queue_add(p, &list_sem[p->sid].list_blocked, proc, node, priority);
 }
 
 /*******************************************************************************
