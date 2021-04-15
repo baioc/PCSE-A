@@ -33,20 +33,22 @@ extern void divide_error_handler(void);
 extern void protection_exception_handler(void);
 extern void page_fault_handler(void);
 
-/// Manages change of priority of a process who is AWAITING_IO. @[mqueue.c]
-extern void mq_changing_proc_prio(struct proc *p);
+// @[mqueue.c]
+extern void mq_process_init(struct proc *p);
+extern void mq_process_destroy(struct proc *p);
+extern void mq_process_chprio(struct proc *p);
 
-/// Manages change of priority of a process who is BLOCKED. @[sem.c]
-extern void sem_changing_proc_prio(struct proc *p);
+// @[sem.c]
+extern void sem_process_init(struct proc *p);
+extern void sem_process_destroy(struct proc *p);
+extern void sem_process_chprio(struct proc *p);
 
+// @[shm.c]
 /**
  * Initializes shared page structures at a given virtual address.
  * Returns at-the-end shared space address on sucess, otherwise zero.
- * @[shm.c]
  */
 extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
-
-/// Frees shm-related system resources owned by a given process. @[shm.c]
 extern void shm_process_destroy(struct proc *proc);
 
 /*******************************************************************************
@@ -249,6 +251,10 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   new_proc->children = (link)LIST_HEAD_INIT(new_proc->children);
   filiate(new_proc, current_process);
 
+  // additional initialization subroutines
+  mq_process_init(new_proc);
+  sem_process_init(new_proc);
+
   // this process is now ready to run
   queue_del(new_proc, node);
   new_proc->state = READY;
@@ -302,11 +308,11 @@ int chprio(int pid, int newprio)
     break;
 
   case AWAITING_IO:
-    mq_changing_proc_prio(proc);
+    mq_process_chprio(proc);
     break;
 
   case BLOCKED:
-    sem_changing_proc_prio(proc);
+    sem_process_chprio(proc);
     break;
 
   // new priority will take effect when it wakes up
@@ -349,12 +355,16 @@ int kill(int pid)
   struct proc *proc = &process_table[pid];
 
   switch (proc->state) {
+  // can't kill what is already dead
   case DEAD:
   case ZOMBIE:
     return -1;
-  case ACTIVE: // current process just killed itself :'( lets just exit
+
+  // suicide
+  case ACTIVE:
     exit(0);
     break;
+
   case READY:
   case SLEEPING:
   case AWAITING_IO:
@@ -424,7 +434,7 @@ void divide_error(void)
   printf("  Error [%s%%%i]: Divide by zero\n",
          current_process->name,
          current_process->pid);
-  exit(0);
+  kill(current_process->pid);
 }
 
 void protection_exception(void)
@@ -432,7 +442,7 @@ void protection_exception(void)
   printf("  Error [%s%%%i]: General protection fault\n",
          current_process->name,
          current_process->pid);
-  exit(0);
+  kill(current_process->pid);
 }
 
 void page_fault(void)
@@ -440,7 +450,7 @@ void page_fault(void)
   printf("  Error [%s%%%i]: Page fault\n",
          current_process->name,
          current_process->pid);
-  exit(0);
+  kill(current_process->pid);
 }
 
 void schedule(void)
@@ -535,7 +545,7 @@ static inline void filiate(struct proc *c, struct proc *p)
 
 static void zombify(struct proc *proc, int retval)
 {
-  proc->retval = retval; // store exit code to be read later
+  proc->retval = retval;
   proc->state = ZOMBIE;
 
   // when a process dies, its children must be adopted by init
@@ -564,6 +574,8 @@ static void destroy(struct proc *proc)
   queue_del(proc, siblings);
 
   // free resources
+  sem_process_destroy(proc);
+  mq_process_destroy(proc);
   shm_process_destroy(proc);
   while (proc->pages != NULL) {
     struct page *page = proc->pages;

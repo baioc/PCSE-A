@@ -25,7 +25,7 @@
  * Types
  ******************************************************************************/
 
-struct shm_page; // forward decl
+struct shm_page; // forward decls
 
 struct proc {
   // current state
@@ -75,15 +75,17 @@ struct proc {
   uint32_t         shm_begin; // virtual address base for shared pages
   struct shm_page *shm_slots[MAX_SHM_PAGES];
 
-  // semaphore-related fields
-  int  sid;         // id of the semaphore blocking it (if BLOCKED)
-  bool sjustreset;  // whether sem was reset
-  bool sjustdelete; // whether sem was deleted
-
   // message queue-related fields
   void *message;     // message being sent/received
   int   m_queue_fid; // queue in which the process is blocked, if any
   bool  m_queue_rd;  // whether the queue was deleted/reset
+  link owned_queues;
+
+  // semaphore-related fields
+  int  sid;         // id of the semaphore blocking it (if BLOCKED)
+  bool sjustreset;  // whether sem was reset
+  bool sjustdelete; // whether sem was deleted
+  link owned_semaphores;
 };
 
 /*******************************************************************************

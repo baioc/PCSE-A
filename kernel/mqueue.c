@@ -17,7 +17,6 @@
 #include "mem.h"
 #include "queue.h"
 #include "stdbool.h"
-#include "stdint.h"
 
 /*******************************************************************************
  * Macros
@@ -33,9 +32,9 @@
 typedef struct proc proc;
 
 struct message_queue {
-  int                   fid;
-  bool                  in_use;
-  struct message_queue *next;
+  int  fid;
+  bool in_use;
+  link node;
 
   // FIFO buffer and its related fields
   int *buffer;
@@ -69,8 +68,7 @@ static void remove_waiting_processes(int fid);
  ******************************************************************************/
 
 static struct message_queue queue_tab[NBQUEUE];
-
-static struct message_queue *unused_queues = NULL;
+static link                 unused_queues;
 
 /*******************************************************************************
  * Public function
@@ -78,22 +76,21 @@ static struct message_queue *unused_queues = NULL;
 
 void mq_init(void)
 {
-  unused_queues = NULL;
+  unused_queues = (link)LIST_HEAD_INIT(unused_queues);
   for (int i = NBQUEUE - 1; i >= 0; --i) {
     struct message_queue *mq = &queue_tab[i];
     mq->fid = i;
-    mq->next = unused_queues;
-    unused_queues = mq;
     mq->in_use = false;
+    queue_add(mq, &unused_queues, struct message_queue, node, fid);
   }
 }
 
 int pcreate(int count)
 {
   if (count <= 0 || count > INT32_MAX / (int)sizeof(int)) return -1;
-  if (unused_queues == NULL) return -1;
+  if (queue_empty(&unused_queues)) return -1;
 
-  struct message_queue *mq = unused_queues;
+  struct message_queue *mq = queue_bottom(&unused_queues, struct message_queue, node);
   mq->buffer = mem_alloc(sizeof(int) * count);
   if (mq->buffer == NULL) return -1;
   mq->lenght = count;
@@ -103,9 +100,11 @@ int pcreate(int count)
   mq->waiting_to_send = (link)LIST_HEAD_INIT(mq->waiting_to_send);
   mq->waiting_to_receive = (link)LIST_HEAD_INIT(mq->waiting_to_receive);
 
-  // remove queue from free list
-  unused_queues = unused_queues->next;
+  // remove queue from free list and reuse link in owned process
+  queue_del(mq, node);
   mq->in_use = true;
+  proc *p = get_current_process();
+  queue_add(mq, &p->owned_queues, struct message_queue, node, in_use);
 
   return mq->fid;
 }
@@ -219,9 +218,9 @@ int pdelete(int fid)
   mem_free(queue_tab[fid].buffer, queue_tab[fid].lenght * sizeof(int));
 
   // place queue back in the free list
-  queue_tab[fid].next = unused_queues;
-  unused_queues = &queue_tab[fid];
+  queue_del(&queue_tab[fid], node);
   queue_tab[fid].in_use = false;
+  queue_add(&queue_tab[fid], &unused_queues, struct message_queue, node, fid);
 
   return 0;
 }
@@ -274,7 +273,20 @@ int pcount(int fid, int *count)
   return 0;
 }
 
-void mq_changing_proc_prio(proc *p)
+void mq_process_init(struct proc *p)
+{
+  p->owned_queues = (link)LIST_HEAD_INIT(p->owned_queues);
+}
+
+void mq_process_destroy(struct proc *p)
+{
+  while (!queue_empty(&p->owned_queues)) {
+    struct message_queue *mq = queue_out(&p->owned_queues, struct message_queue, node);
+    pdelete(mq->fid);
+  }
+}
+
+void mq_process_chprio(struct proc *p)
 {
   assert(p->state == AWAITING_IO);
   assert(valid_fid(p->m_queue_fid));

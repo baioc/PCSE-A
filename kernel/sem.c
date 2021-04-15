@@ -30,11 +30,11 @@
 typedef struct proc proc;
 
 typedef struct semaph {
-  int            sid;
-  bool           in_use;
-  short int      count;
-  link           list_blocked; // List of process blocked on this semaphore
-  struct semaph *next;
+  int       sid;
+  bool      in_use;
+  link      node;
+  short int count;
+  link      list_blocked; // List of process blocked on this semaphore
 } semaph;
 
 /*******************************************************************************
@@ -45,9 +45,8 @@ typedef struct semaph {
  * Variables
  ******************************************************************************/
 
-static struct semaph *free_list = NULL;
-
 static struct semaph list_sem[MAXNBR_SEM];
+static link          free_list;
 
 /*******************************************************************************
  * Public function
@@ -55,27 +54,27 @@ static struct semaph list_sem[MAXNBR_SEM];
 
 void sem_init(void)
 {
-  free_list = NULL;
+  free_list = (link)LIST_HEAD_INIT(free_list);
   for (int i = MAXNBR_SEM - 1; i >= 0; --i) {
     struct semaph *sem = &list_sem[i];
     sem->sid = i;
     sem->in_use = false;
-    sem->next = free_list;
-    free_list = sem;
+    queue_add(sem, &free_list, struct semaph, node, sid);
   }
 }
 
 int screate(short int count)
 {
-  if (count < 0 || free_list == NULL) return -1;
+  if (count < 0) return -1;
+  if (queue_empty(&free_list)) return -1;
 
-  // pop first free semaphore
-  struct semaph *sem = free_list;
-  free_list = free_list->next;
-  sem->in_use = true;
-
+  struct semaph *sem  = queue_bottom(&free_list, struct semaph, node);
   sem->count = count;
   sem->list_blocked = (link)LIST_HEAD_INIT(sem->list_blocked);
+  queue_del(sem, node);
+  sem->in_use = true;
+  proc *p = get_current_process();
+  queue_add(sem, &p->owned_semaphores, struct semaph, node, in_use);
 
   return sem->sid;
 }
@@ -92,9 +91,9 @@ int sdelete(int sem)
     set_ready(p);
   }
 
+  queue_del(&list_sem[sem], node);
   list_sem[sem].in_use = false;
-  list_sem[sem].next = free_list;
-  free_list = &list_sem[sem];
+  queue_add(&list_sem[sem], &free_list, struct semaph, node, sid);
 
   return 0;
 }
@@ -189,7 +188,20 @@ int scount(int sem)
   return ((unsigned int)list_sem[sem].count) & 0x0000ffff;
 }
 
-void sem_changing_proc_prio(proc *p)
+void sem_process_init(struct proc *p)
+{
+  p->owned_semaphores = (link)LIST_HEAD_INIT(p->owned_semaphores);
+}
+
+void sem_process_destroy(struct proc *p)
+{
+  while (!queue_empty(&p->owned_semaphores)) {
+    struct semaph *sem = queue_out(&p->owned_semaphores, struct semaph, node);
+    sdelete(sem->sid);
+  }
+}
+
+void sem_process_chprio(struct proc *p)
 {
   assert(p->state == BLOCKED);
   assert(p->sid >= 0 && p->sid < MAXNBR_SEM && list_sem[p->sid].in_use);
