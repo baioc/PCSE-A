@@ -76,7 +76,10 @@ struct proc {
   struct shm_page *shm_slots[MAX_SHM_PAGES];
 
   // message queue-related fields
-  void *message;     // message being sent/received
+  union {
+    int sending;
+    int *receiving;
+  } message;
   int   m_queue_fid; // queue in which the process is blocked, if any
   bool  m_queue_rd;  // whether the queue was deleted/reset
   link owned_queues;

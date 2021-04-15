@@ -90,7 +90,8 @@ int pcreate(int count)
   if (count <= 0 || count > INT32_MAX / (int)sizeof(int)) return -1;
   if (queue_empty(&unused_queues)) return -1;
 
-  struct message_queue *mq = queue_bottom(&unused_queues, struct message_queue, node);
+  struct message_queue *mq =
+      queue_bottom(&unused_queues, struct message_queue, node);
   mq->buffer = mem_alloc(sizeof(int) * count);
   if (mq->buffer == NULL) return -1;
   mq->lenght = count;
@@ -123,7 +124,7 @@ int psend(int fid, int message)
         queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
     assert(p_to_receive->state == AWAITING_IO);
     assert(p_to_receive->m_queue_fid == fid);
-    receiving_message(fid, (int *)p_to_receive->message);
+    receiving_message(fid, p_to_receive->message.receiving);
     p_to_receive->state = READY;
     set_ready(p_to_receive);
     schedule();
@@ -134,7 +135,7 @@ int psend(int fid, int message)
   {
     // block current process until someone wants to listen
     proc *active_process = get_current_process();
-    active_process->message = (void *)message;
+    active_process->message.sending = message;
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
@@ -170,7 +171,7 @@ int preceive(int fid, int *message)
     proc *p_to_send = queue_out(&queue_tab[fid].waiting_to_send, proc, node);
     assert(p_to_send->state == AWAITING_IO);
     assert(p_to_send->m_queue_fid == fid);
-    sending_message(fid, (int)p_to_send->message);
+    sending_message(fid, p_to_send->message.sending);
 
     // and then unblock that process
     p_to_send->state = READY;
@@ -183,7 +184,7 @@ int preceive(int fid, int *message)
   {
     // block current process until someone wants to send a message
     proc *active_process = get_current_process();
-    active_process->message = (void *)message;
+    active_process->message.receiving = message;
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
@@ -281,7 +282,8 @@ void mq_process_init(struct proc *p)
 void mq_process_destroy(struct proc *p)
 {
   while (!queue_empty(&p->owned_queues)) {
-    struct message_queue *mq = queue_out(&p->owned_queues, struct message_queue, node);
+    struct message_queue *mq =
+        queue_out(&p->owned_queues, struct message_queue, node);
     pdelete(mq->fid);
   }
 }
