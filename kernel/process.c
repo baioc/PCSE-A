@@ -46,6 +46,9 @@ extern void sem_changing_proc_prio(struct proc *p);
  */
 extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
 
+/// Frees shm-related system resources owned by a given process. @[shm.c]
+extern void shm_process_destroy(struct proc *proc);
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -174,7 +177,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   if (app == NULL) return -1;
   if (prio < 1 || prio > MAXPRIO) return -1;
 
-  // make sure stack size calculation does not overflow and add padding
+  // make sure stack calculation does not overflow and add padding
   const unsigned ssize_padding = 2 * sizeof(uint32_t);
   if (ssize > MMAP_STACK_END - ssize_padding) return -1;
   ssize += ssize_padding;
@@ -186,7 +189,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   // otherwise start setting it up
   assert(new_proc->pid == new_proc - process_table);
   new_proc->priority = prio;
-  new_proc->name = (char *)app->name;
+  new_proc->name = (char *)app->name; // make sure to use kernelspace string
 
   // allocate kernel stack
   new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
@@ -196,7 +199,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   // initialize frame list and pagedir (copy kernel's first 64 pgdir entries)
   new_proc->pages = page_alloc();
   if (new_proc->pages == NULL) goto FAIL_FREE_STACK;
-  new_proc->pages->ref.next = NULL;
+  new_proc->pages->next = NULL;
   new_proc->ctx.page_dir = new_proc->pages->frame * PAGE_SIZE;
   memcpy((uint32_t *)new_proc->ctx.page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
@@ -263,7 +266,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 FAIL_FREE_PAGES:
   while (new_proc->pages != NULL) {
     struct page *page = new_proc->pages;
-    new_proc->pages = page->ref.next;
+    new_proc->pages = page->next;
     page_free(page);
   }
 FAIL_FREE_STACK:
@@ -368,9 +371,12 @@ int kill(int pid)
 
 void sleep(unsigned long ticks)
 {
-  // XXX: alarm could overflow (and so could the system clock) ...
   current_process->time.alarm = current_clock() + ticks;
-  assert(current_process->time.alarm >= current_clock()); //... assert otherwise
+  if (current_process->time.alarm < current_clock()) { // => overflow
+    printf("  Warning [%s%%%i]: Saturated alarm\n",
+           current_process->name,
+           current_process->pid);
+  }
   current_process->state = SLEEPING;
   schedule();
 }
@@ -502,7 +508,7 @@ CHECK_ALARM:
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
-  // NOTE: this always causes a TLB flush, and shm relies on this behaviour
+  // XXX: schedule() always causes a TLB flush. other code may rely on this
   switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
@@ -544,8 +550,7 @@ static void zombify(struct proc *proc, int retval)
   }
 
   // let waiting parent know its child is now a ready-to-be-reaped zombie
-  assert(proc->parent != NULL);
-  if (proc->parent->state == AWAITING_CHILD) {
+  if (proc->parent != NULL && proc->parent->state == AWAITING_CHILD) {
     proc->parent->state = READY;
     queue_add(proc->parent, &ready_procs, struct proc, node, priority);
   }
@@ -556,12 +561,13 @@ static void destroy(struct proc *proc)
   assert(proc->state == ZOMBIE);
 
   // remove proc from its parent children list
-  if (proc->parent != NULL) queue_del(proc, siblings);
+  queue_del(proc, siblings);
 
   // free resources
+  shm_process_destroy(proc);
   while (proc->pages != NULL) {
     struct page *page = proc->pages;
-    proc->pages = page->ref.next;
+    proc->pages = page->next;
     page_free(page);
   }
   mem_free(proc->kernel_stack, KERNEL_STACK_SIZE * sizeof(int));
@@ -595,7 +601,7 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
     // try to allocate a page for the actual data
     struct page *page = page_alloc();
     if (page == NULL) return 0;
-    page->ref.next = proc->pages;
+    page->next = proc->pages;
     proc->pages = page;
 
     // compute page-aligned addresses, both virtual and physical
@@ -614,13 +620,14 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
       // fortunately, it fits exactly in a page
       struct page *page_tab = page_alloc();
       if (page_tab == NULL) return 0;
-      page_tab->ref.next = proc->pages;
+      page_tab->next = proc->pages;
       proc->pages = page_tab;
       // add page directory entry, then try the mapping again (should work now)
       ptab_map((uint32_t *)proc->ctx.page_dir, virt, page_tab->frame, flags);
       miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
       assert(!miss);
     }
+    // NOTE: this is only used before proc runs, so no need to flush TLB
 
     base += PAGE_SIZE;
     size -= chunk;

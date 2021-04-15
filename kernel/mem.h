@@ -33,10 +33,7 @@
 
 struct page {
   unsigned     frame; // page frame index
-  union {
-    struct page *next;  // while the page is allocated, this can be used freely
-    int          count; // for shared pages only
-  } ref;
+  struct page *next;  // while the page is allocated, this can be used freely
 };
 
 /*******************************************************************************

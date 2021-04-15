@@ -105,7 +105,7 @@ void mem_init(void)
   // add all pages in the pool (kernel frames excluded) to the free list
   g_free_list = NULL;
   for (int i = POOL_SIZE - 1; i >= 0; --i) {
-    g_user_memory[i].ref.next = g_free_list;
+    g_user_memory[i].next = g_free_list;
     g_free_list = &g_user_memory[i];
   }
 
@@ -120,21 +120,21 @@ struct page *page_alloc(void)
   // pop free list head and use its address to compute index and frame number
   if (g_free_list == NULL) return NULL;
   struct page *p = g_free_list;
-  g_free_list = g_free_list->ref.next;
+  g_free_list = g_free_list->next;
   p->frame = KERNEL_PAGES + (p - g_user_memory);
-  p->ref.next = NULL;
+  p->next = NULL;
   return p;
 }
 
 void page_free(struct page *p)
 {
   // check address is valid and index wasn't messed up
-  assert(p >= &g_user_memory[0] && p <= &g_user_memory[POOL_SIZE - 1]);
   assert((p->frame - KERNEL_PAGES) == (unsigned)(p - g_user_memory));
+  if (p < &g_user_memory[0] || p >= &g_user_memory[POOL_SIZE]) BUG();
 
   // zero out and return memory back to global free list
   memset((void *)(p->frame * PAGE_SIZE), 0, PAGE_SIZE);
-  p->ref.next = g_free_list;
+  p->next = g_free_list;
   g_free_list = p;
 }
 

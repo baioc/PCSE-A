@@ -17,30 +17,42 @@
 #include "mem.h"
 #include "stdint.h"
 #include "debug.h"
+#include "string.h"
 
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
-#define MAX_SHM_PAGES 128 /* per process */
-
 /*******************************************************************************
  * Types
  ******************************************************************************/
+
+// shared_ptr<struct page>
+struct shm_page {
+  struct page *shared;
+  int          refcount;
+  size_t       keylen; // as returned by strlen(key)
+  char         key[/* keylen + 1 */];
+};
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
-/// Maps a shared page into a process and links a local to it.
-static uint32_t page_share(struct proc *proc, struct page *restrict local,
-                           const struct page *restrict shared);
+// Negative when not found, valid index on success.
+static int find_slot(struct shm_page **slots, struct shm_page *ref);
+
+// Maps a shared page into a process, returning virtual address.
+static uint32_t mmap_shared(struct proc *proc, int slot, struct page *shared);
+
+// Decreases a shared page's reference count;
+static void unref(struct shm_page *shm);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
-static hash_t shm_map; // "key" -> pointer to physical page struct
+static hash_t shm_map; // (char *) -> (struct shm_page *)
 
 /*******************************************************************************
  * Public function
@@ -56,125 +68,133 @@ void *shm_create(const char *key)
   // check if key is valid and unused
   if (key == NULL || hash_isset(&shm_map, (void *)key)) return NULL;
 
-  // check whether the process has any free shm slots
+  // look for a free shm page slot
   struct proc *proc = get_current_process();
-  struct page *page = proc->shm_free;
+  const int    slot = find_slot(proc->shm_slots, NULL);
+  if (slot < 0) return NULL;
+
+  // allocate an actual memory page to share
+  struct page *page = page_alloc();
   if (page == NULL) return NULL;
 
-  // allocate a physical page to be shared
-  struct page *frame = page_alloc();
-  if (frame == NULL) return NULL;
+  // allocate "shared_ptr" and key copy on the heap
+  const size_t keylen = strlen(key);
+  proc->shm_slots[slot] = mem_alloc(sizeof(struct shm_page) + keylen + 1);
+  if (proc->shm_slots[slot] == NULL) {
+    page_free(page);
+    return NULL;
+  }
+  proc->shm_slots[slot]->shared = page;
+  proc->shm_slots[slot]->refcount = 1;
+  proc->shm_slots[slot]->keylen = keylen;
+  strncpy(proc->shm_slots[slot]->key, key, keylen + 1);
 
-  // mark the shm page (and the key) as being in use
-  frame->ref.count = 1;
-  const int err = hash_set(&shm_map, (void *)key, frame);
+  // associate key with the shared ptr in the global map
+  int err =
+      hash_set(&shm_map, proc->shm_slots[slot]->key, proc->shm_slots[slot]);
   assert(!err);
-  proc->shm_free = proc->shm_free->ref.next;
 
-  return (void *)page_share(proc, page, frame);
+  return (void *)mmap_shared(proc, slot, page);
 }
 
 void *shm_acquire(const char *key)
 {
-  struct page *frame = hash_get(&shm_map, (void *)key, NULL);
-  if (frame == NULL) return NULL;
+  struct shm_page *shm = hash_get(&shm_map, (void *)key, NULL);
+  if (shm == NULL) return NULL;
 
+  // look for a free shm page slot
   struct proc *proc = get_current_process();
-  struct page *page = proc->shm_free;
-  if (page == NULL) return NULL;
+  const int    slot = find_slot(proc->shm_slots, NULL);
+  if (slot < 0) return NULL;
 
-  // add a reference count to the shared page
-  frame->ref.count += 1;
-  proc->shm_free = proc->shm_free->ref.next;
+  // mark slot and add a reference count to the shared page
+  proc->shm_slots[slot] = shm;
+  shm->refcount++;
 
-  return (void *)page_share(proc, page, frame);
+  return (void *)mmap_shared(proc, slot, shm->shared);
 }
 
 void shm_release(const char *key)
 {
-  struct page *frame = hash_get(&shm_map, (void *)key, NULL);
-  if (frame == NULL) return;
+  struct shm_page *shm = hash_get(&shm_map, (void *)key, NULL);
+  if (shm == NULL) return;
 
-  // unlink process-local copy
+  // free local slot
   struct proc *proc = get_current_process();
-  struct page *prev = NULL;
-  struct page *page = proc->shm_used;
-  while (page != NULL) {
-    if (page->frame == frame->frame) break;
-    prev = page;
-    page = page->ref.next;
-  }
-  if (page == NULL) // => never had acquired page with that key
-    return;
-  else if (prev == NULL) // => page is list head
-    proc->shm_used = proc->shm_used->ref.next;
-  else // => unchain
-    prev->ref.next = page->ref.next;
+  const int    slot = find_slot(proc->shm_slots, shm);
+  if (slot < 0) return; // => never had acquired shared page with that key
+  proc->shm_slots[slot] = NULL;
 
-  // add local page back to free list
-  page->ref.next = proc->shm_free;
-  proc->shm_free = page;
-
-  // only free when refcount reaches zero
-  frame->ref.count -= 1;
-  if (frame->ref.count <= 0) {
-    hash_del(&shm_map, (void *)key);
-    page_free(frame);
-  }
+  unref(shm);
 }
 
 uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin)
 {
   // to ensure all shared pages go into one table, we want a 4MiB-aligned base
   assert(MAX_SHM_PAGES <= 1024);
+  assert(shm_begin > 0);
   proc->shm_begin = shm_begin + PAGE_SIZE * PAGE_TABLE_LENGTH;
-  if (proc->shm_begin < shm_begin) return 0; // => overflow check
+  if (proc->shm_begin < shm_begin) return 0;
   proc->shm_begin -= proc->shm_begin % (PAGE_SIZE * PAGE_TABLE_LENGTH);
 
-  // allocate memory for the local page struct storage
-  // FIXME: this memory leak
-  proc->shm_pages = mem_alloc(MAX_SHM_PAGES * sizeof(struct page));
-  if (proc->shm_pages == NULL) return 0;
-  proc->shm_used = NULL;
-  proc->shm_free = NULL;
-  for (int i = MAX_SHM_PAGES - 1; i >= 0; --i) {
-    proc->shm_pages[i].ref.next = proc->shm_free;
-    proc->shm_free = &proc->shm_pages[i];
-  }
+  // NULLs mark free shared page slots
+  memset(proc->shm_slots, 0, sizeof(proc->shm_slots));
 
   // preallocate a single non-shared pagetable for the shared pages
-  struct page *shm_pgtab = page_alloc();
-  if (shm_pgtab == NULL) {
-    mem_free(proc->shm_pages, MAX_SHM_PAGES * sizeof(struct page));
-    return 0;
-  }
-  shm_pgtab->ref.next = proc->pages;
-  proc->pages = shm_pgtab; // will be freed when process dies
+  struct page *pgtab = page_alloc();
+  if (pgtab == NULL) return 0;
+  pgtab->next = proc->pages;
+  proc->pages = pgtab; // will be freed when process dies
   uint32_t *pgdir = (uint32_t *)proc->ctx.page_dir;
-  ptab_map(pgdir, proc->shm_begin, shm_pgtab->frame, PAGE_FLAGS_USER_RW);
+  ptab_map(pgdir, proc->shm_begin, pgtab->frame, PAGE_FLAGS_USER_RW);
+  // no need to flush TLB, this is before process runs
 
   return proc->shm_begin + PAGE_SIZE * MAX_SHM_PAGES - 1;
+}
+
+extern void shm_process_destroy(struct proc *proc)
+{
+  for (int i = 0; i < MAX_SHM_PAGES; ++i) {
+    if (proc->shm_slots[i] == NULL) continue;
+    unref(proc->shm_slots[i]);
+    proc->shm_slots[i] = NULL;
+  }
 }
 
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
 
-static uint32_t page_share(struct proc *proc, struct page *restrict local,
-                           const struct page *restrict shared)
+static int find_slot(struct shm_page **slots, struct shm_page *ref)
 {
-  // link a process-local copy of the shared frame
-  local->frame = shared->frame; // frame number is later used to identify it
-  local->ref.next = proc->shm_used;
-  proc->shm_used = local;
+  // we expect MAX_SHM_PAGES to be small so linear search is ok
+  for (int i = 0; i < MAX_SHM_PAGES; ++i) {
+    if (slots[i] == ref) return i;
+  }
+  return -1;
+}
 
+static uint32_t mmap_shared(struct proc *proc, int slot, struct page *shared)
+{
   // map shared memory into the process' page dir
-  const uint32_t virt = proc->shm_begin + (local - proc->shm_pages) * PAGE_SIZE;
+  const uint32_t virt = proc->shm_begin + slot * PAGE_SIZE;
   const uint32_t real = shared->frame * PAGE_SIZE;
   uint32_t *     pgdir = (uint32_t *)proc->ctx.page_dir;
   int            err = page_map(pgdir, virt, real, PAGE_FLAGS_USER_RW);
   assert(!err); // NOTE: we assume shared pages have their table already set up
   schedule();   // ensures TLB flush after page_map
-
   return virt;
+}
+
+static void unref(struct shm_page *shm)
+{
+  // decrease refcount and check whether shared page is still alive
+  shm->refcount--;
+  if (shm->refcount > 0) return;
+
+  // remove global mapping and free resources allocated in shm_create
+  const int err = hash_del(&shm_map, shm->key);
+  assert(!err);
+  page_free(shm->shared);
+  mem_free(shm, sizeof(struct shm_page) + shm->keylen + 1);
 }
