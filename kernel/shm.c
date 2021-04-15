@@ -42,8 +42,8 @@ struct shm_page {
 // Negative when not found, valid index on success.
 static int find_slot(struct shm_page **slots, struct shm_page *ref);
 
-// Maps a shared page into a process, returning virtual address.
-static uint32_t mmap_shared(struct proc *proc, int slot, struct page *shared);
+// Maps/unmaps a shared page in a process, returning virtual address.
+static uint32_t shmmap(struct proc *proc, int slot, struct page *shared, unsigned flags);
 
 // Decreases a shared page's reference count;
 static void unref(struct shm_page *shm);
@@ -94,7 +94,7 @@ void *shm_create(const char *key)
       hash_set(&shm_map, proc->shm_slots[slot]->key, proc->shm_slots[slot]);
   assert(!err);
 
-  return (void *)mmap_shared(proc, slot, page);
+  return (void *)shmmap(proc, slot, page, PAGE_FLAGS_USER_RW);
 }
 
 void *shm_acquire(const char *key)
@@ -111,7 +111,7 @@ void *shm_acquire(const char *key)
   proc->shm_slots[slot] = shm;
   shm->refcount++;
 
-  return (void *)mmap_shared(proc, slot, shm->shared);
+  return (void *)shmmap(proc, slot, shm->shared, PAGE_FLAGS_USER_RW);
 }
 
 void shm_release(const char *key)
@@ -125,6 +125,8 @@ void shm_release(const char *key)
   if (slot < 0) return; // => never had acquired shared page with that key
   proc->shm_slots[slot] = NULL;
 
+  // invalidate virtual page address mapping and remove shared reference
+  shmmap(proc, slot, shm->shared, 0);
   unref(shm);
 }
 
@@ -174,13 +176,13 @@ static int find_slot(struct shm_page **slots, struct shm_page *ref)
   return -1;
 }
 
-static uint32_t mmap_shared(struct proc *proc, int slot, struct page *shared)
+static uint32_t shmmap(struct proc *proc, int slot, struct page *shared, unsigned flags)
 {
   // map shared memory into the process' page dir
   const uint32_t virt = proc->shm_begin + slot * PAGE_SIZE;
   const uint32_t real = shared->frame * PAGE_SIZE;
   uint32_t *     pgdir = (uint32_t *)proc->ctx.page_dir;
-  int            err = page_map(pgdir, virt, real, PAGE_FLAGS_USER_RW);
+  int            err = page_map(pgdir, virt, real, flags);
   assert(!err); // NOTE: we assume shared pages have their table already set up
   schedule();   // ensures TLB flush after page_map
   return virt;

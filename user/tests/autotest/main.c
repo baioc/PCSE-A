@@ -14,9 +14,9 @@ const char *tests[] = {
         "test4",
         "test5",
         "test6",
-        // "test7", // FIXME
+        "test7",
         "test8",
-        // "test9", // FIXME
+        "test9",
         "test10",
         "test11",
         // "test12", // FIXME
@@ -27,9 +27,9 @@ const char *tests[] = {
         "test17",
         "test18",
         // "test19", // FIXME
-        // "test20", // FIXME
-        // "test21", // FIXME
-        // "test22", // FIXME
+        "test20",
+        "test21",
+        "test22",
 };
 
 #define TESTS_NUMBER ((int)(sizeof(tests) / sizeof(tests[0])))
