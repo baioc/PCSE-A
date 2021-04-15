@@ -5,7 +5,6 @@
 
 #include "sysapi.h"
 
-// TODO: missing tests
 const char *tests[] = {
         "test0",
         "test1",
@@ -19,9 +18,9 @@ const char *tests[] = {
         "test9",
         "test10",
         "test11",
-        // "test12", // FIXME
-        // "test13", // FIXME
-        // "test14", // FIXME
+        "test12",
+        "test13",
+        "test14",
         "test15",
         "test16",
         "test17",
@@ -42,7 +41,6 @@ int main(void)
 
         for (i = 0; i < TESTS_NUMBER; i++) {
                 printf("Test %s : ", tests[i]);
-                debug_me();
                 pid = start(tests[i], 4000, 128, NULL);
                 waitpid(pid, &ret);
                 assert(ret == 0);

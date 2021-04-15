@@ -10,8 +10,8 @@
  ******************************************************************************/
 
 #include "mqueue.h"
-#include "pm.h"
 
+#include "pm.h"
 #include "stddef.h"
 #include "debug.h"
 #include "mem.h"
@@ -114,42 +114,34 @@ int psend(int fid, int message)
 {
   if (!valid_fid(fid)) return -1;
 
-  // queue is empty and there are waiting processes
-  if (queue_tab[fid].nb_send == 0 &&
-      !queue_empty(&queue_tab[fid].waiting_to_receive))
-  {
-    // send message and yield to the highest-priority waiting proccess
-    sending_message(fid, message);
+  // if there is at least one process waiting to receive
+  if (!queue_empty(&queue_tab[fid].waiting_to_receive)) {
+    // store message directly in the listener's inbox and unblock it
     proc *p_to_receive =
         queue_out(&queue_tab[fid].waiting_to_receive, proc, node);
     assert(p_to_receive->state == AWAITING_IO);
     assert(p_to_receive->m_queue_fid == fid);
-    receiving_message(fid, p_to_receive->message.receiving);
+    p_to_receive->message = message;
     p_to_receive->state = READY;
     set_ready(p_to_receive);
     schedule();
-  }
 
-  // else if the queue is full
-  else if (queue_tab[fid].nb_send >= queue_tab[fid].lenght)
-  {
+    // else if the queue is full
+  } else if (queue_tab[fid].nb_send >= queue_tab[fid].lenght) {
     // block current process until someone wants to listen
     proc *active_process = get_current_process();
-    active_process->message.sending = message;
     active_process->m_queue_fid = fid;
+    active_process->message = message;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
     queue_add(
         active_process, &queue_tab[fid].waiting_to_send, proc, node, priority);
     schedule();
-
     // check whether we unblocked because the queue was actually reset/deleted
     if (get_current_process()->m_queue_rd) return -1;
-  }
 
-  // else we send off the message and return right away
-  else
-  {
+    // else we asynchronously send off the message, returning right away
+  } else {
     sending_message(fid, message);
   }
 
@@ -160,31 +152,23 @@ int preceive(int fid, int *message)
 {
   if (!valid_fid(fid)) return -1;
 
-  // queue is full and there is at least one process waiting to send
-  if (queue_tab[fid].nb_send == queue_tab[fid].lenght &&
-      !queue_empty(&queue_tab[fid].waiting_to_send))
-  {
-    // receive oldest message
+  // if there is at least one process waiting to send
+  if (!queue_empty(&queue_tab[fid].waiting_to_send)) {
+    // receive the oldest message in the queue
     receiving_message(fid, message);
-
-    // immediately fill in the freed slot through one of the blocked emitters
+    // read emitter's outbox and put it in the new slot, then unblock it
     proc *p_to_send = queue_out(&queue_tab[fid].waiting_to_send, proc, node);
     assert(p_to_send->state == AWAITING_IO);
     assert(p_to_send->m_queue_fid == fid);
-    sending_message(fid, p_to_send->message.sending);
-
-    // and then unblock that process
+    sending_message(fid, p_to_send->message);
     p_to_send->state = READY;
     set_ready(p_to_send);
     schedule();
-  }
 
-  // else if the queue is empty
-  else if (queue_tab[fid].nb_send == 0)
-  {
+    // else if the queue is empty
+  } else if (queue_tab[fid].nb_send == 0) {
     // block current process until someone wants to send a message
     proc *active_process = get_current_process();
-    active_process->message.receiving = message;
     active_process->m_queue_fid = fid;
     active_process->m_queue_rd = false;
     active_process->state = AWAITING_IO;
@@ -194,14 +178,14 @@ int preceive(int fid, int *message)
               node,
               priority);
     schedule();
-
     // check whether we unblocked because the queue was actually reset/deleted
-    if (get_current_process()->m_queue_rd) return -1;
-  }
+    if (get_current_process()->m_queue_rd)
+      return -1;
+    else if (message != NULL)
+      *message = get_current_process()->message;
 
-  // else we slurp the message and return right away
-  else
-  {
+    // else we slurp a message and return right away
+  } else {
     receiving_message(fid, message);
   }
 
@@ -222,6 +206,9 @@ int pdelete(int fid)
   queue_del(&queue_tab[fid], node);
   queue_tab[fid].in_use = false;
   queue_add(&queue_tab[fid], &unused_queues, struct message_queue, node, fid);
+
+  // yield in case there were higher priority process waiting
+  schedule();
 
   return 0;
 }

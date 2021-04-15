@@ -10,8 +10,8 @@
  ******************************************************************************/
 
 #include "sem.h"
-#include "pm.h"
 
+#include "pm.h"
 #include "stddef.h"
 #include "queue.h"
 #include "stdbool.h"
@@ -68,7 +68,7 @@ int screate(short int count)
   if (count < 0) return -1;
   if (queue_empty(&free_list)) return -1;
 
-  struct semaph *sem  = queue_bottom(&free_list, struct semaph, node);
+  struct semaph *sem = queue_bottom(&free_list, struct semaph, node);
   sem->count = count;
   sem->list_blocked = (link)LIST_HEAD_INIT(sem->list_blocked);
   queue_del(sem, node);

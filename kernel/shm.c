@@ -10,8 +10,8 @@
  ******************************************************************************/
 
 #include "shm.h"
-#include "pm.h"
 
+#include "pm.h"
 #include "hash.h"
 #include "stddef.h"
 #include "mem.h"
@@ -43,7 +43,8 @@ struct shm_page {
 static int find_slot(struct shm_page **slots, struct shm_page *ref);
 
 // Maps/unmaps a shared page in a process, returning virtual address.
-static uint32_t shmmap(struct proc *proc, int slot, struct page *shared, unsigned flags);
+static uint32_t shmmap(struct proc *proc, int slot, struct page *shared,
+                       unsigned flags);
 
 // Decreases a shared page's reference count;
 static void unref(struct shm_page *shm);
@@ -176,7 +177,8 @@ static int find_slot(struct shm_page **slots, struct shm_page *ref)
   return -1;
 }
 
-static uint32_t shmmap(struct proc *proc, int slot, struct page *shared, unsigned flags)
+static uint32_t shmmap(struct proc *proc, int slot, struct page *shared,
+                       unsigned flags)
 {
   // map shared memory into the process' page dir
   const uint32_t virt = proc->shm_begin + slot * PAGE_SIZE;
