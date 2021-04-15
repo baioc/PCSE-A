@@ -71,8 +71,6 @@ void clock_init(void)
 
 void clock_settings(unsigned long *quartz, unsigned long *ticks)
 {
-  assert(quartz != NULL);
-  assert(ticks != NULL);
   *quartz = QUARTZ_FREQ;
   *ticks = QUARTZ_FREQ / CLOCKFREQ;
 }
@@ -90,6 +88,7 @@ void wait_clock(unsigned long ticks)
 void clock_tick(void)
 {
   g_jiffies += 1;
+  assert(g_jiffies != 0); // => overflow which in practice won't happen
   acknowledge_interrupt(0);
   process_tick();
 }

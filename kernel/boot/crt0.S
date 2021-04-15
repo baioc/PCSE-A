@@ -83,7 +83,7 @@ enable_paging:
 	orl	$0x80010001,%eax
 	movl	%eax,%cr0
 
-	/* XXX: this seems like a sanity check to test paging ... or force initial TLB usage (?) */
+	/* NOTE: this seems like a sanity check to test paging ... or force initial TLB usage (?) */
 	jmp	0f
 0:	movl	$0f,%eax
 	jmp	*%eax
