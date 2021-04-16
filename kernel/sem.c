@@ -169,8 +169,8 @@ int wait(int sem)
 
   // we know for a fact this should block, so block
   proc *p = get_current_process();
-  p->sid = sem;
-  p->sjustreset = false;
+  p->sid = sem;          // indicates where is is blocked
+  p->sjustreset = false; // flags which are checked just below
   p->sjustdelete = false;
   p->state = BLOCKED;
   queue_add(p, &list_sem[sem].blocked, proc, node, priority);
