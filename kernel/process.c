@@ -383,6 +383,7 @@ void sleep(unsigned long ticks)
 {
   current_process->time.alarm = current_clock() + ticks;
   if (current_process->time.alarm < current_clock()) { // => overflow
+    current_process->time.alarm = -1;                  // === max in unsigned
     printf("  Warning [%s%%%i]: Saturated alarm\n",
            current_process->name,
            current_process->pid);
