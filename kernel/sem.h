@@ -21,6 +21,7 @@
  /*******************************************************************************
   * Types
   ******************************************************************************/
+  // Represents a semaphore
   struct _semaph{
     short int sid;
     short int count;
@@ -44,6 +45,13 @@
  /*******************************************************************************
   * Public function
   ******************************************************************************/
+  /*
+  This function is called only one time, in process_init from process.c
+  It init the lists of used and unused id (used_sid will remain empty of
+  course)
+  It is useful to know which sids are used by active semaphore and which
+  are unused
+  */
   void init_indice_sem();
   /*
   Create a semaphore

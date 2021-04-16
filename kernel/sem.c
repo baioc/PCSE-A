@@ -61,6 +61,7 @@
       queue_add(indice_list, &unused_sid, sid_queue, node_sid, prio);
     }
   }
+
   /*
   Create a semaphore with a counter value of count
   Returns -1 if the value of count is negative or if we cannot allocate more
@@ -156,7 +157,9 @@
 
   /*
   Reset the semaphore list_sem[sem] and set it counter with a new value (count)
-  
+  Also free all the process blocked by this semaphore
+  Returns -1 if the sem value is wrong or if count < 0
+  Otherwise returns 0
   */
   int sreset(int sem,short int count){
     if(sem >= MAXNBR_SEM || sem < 0 || count < 0 || is_used(sem) == 0) return -1;
@@ -164,7 +167,7 @@
     while(queue_empty(&(list_sem[sem].list_blocked)) == 0){
       p = queue_out(&(list_sem[sem].list_blocked), proc, blocked);
       p->state = READY;
-      p->sjustreset = 1;
+      p->sjustreset = 1; // useful for wait function
       queue_add(p, &ready_procs, proc, node, priority);
     }
     list_sem[sem].count = count;
@@ -174,6 +177,10 @@
 
   /*
   Test the P operation on semaphore list_sem[sem] without blocking it
+  Returns -1 if sem value is wrong
+  Returns -2 if we excess counter capacity
+  Returns -3 semaphore's counter value is negative or 0
+  Otherwise decrements counter and returns 0
   */
   int try_wait(int sem){
     if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
@@ -185,6 +192,12 @@
 
   /*
   Do the P operation on semaphore list_sem[sem]
+  Returns -1 if sem value is wrong
+  Returns -2 if we excess counter capacity
+  After a process has been free from the blocked state:
+  Returns -3 if it is because the sem just deleted
+  Returns -4 if it is because the sem juste reseted
+  Otherwise returns 0
   */
   int wait(int sem){
     if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
@@ -192,12 +205,13 @@
     list_sem[sem].count -= 1;
     if(list_sem[sem].count < 0){
       current_process->state = BLOCKED;
-      current_process->sid = sem;
-      current_process->sjustreset = 0;
+      current_process->sid = sem; // to indicate which sem is blocking it
+      current_process->sjustreset = 0; // reinit these var
       current_process->sjustdelete = 0;
       queue_add(current_process, &(list_sem[sem].list_blocked), proc,
                                                             blocked, priority);
       schedule();
+      // After the release of the process
       if(current_process->sjustdelete == 1) return -3; // After a sdelete
       if(current_process->sjustreset == 1) return -4; // After a sreset
     }
@@ -205,7 +219,7 @@
   }
 
   /*
-  Return the value of the semaphore list_sem[sem]
+  Returns the counter value of the semaphore list_sem[sem]
   */
   int scount(int sem){
     if(sem >= MAXNBR_SEM || sem < 0 || is_used(sem) == 0) return -1;
@@ -214,6 +228,11 @@
  /*******************************************************************************
   * Internal function
   ******************************************************************************/
+  /*
+  Show if the sid sem is used or not
+  Returns 1 if it is used
+  Otherwise returns 0
+  */
   static int is_used(int sem){
     sid_queue *iterator;
     queue_for_each(iterator, &used_sid, sid_queue, node_sid){
