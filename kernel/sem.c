@@ -134,7 +134,7 @@ int signaln(int sem, short int count)
   }
 
   // check for left-over signals after unblockings
-  if (queue_empty(&s->blocked) && count >= 0) s->value = count;
+  if (queue_empty(&s->blocked)) s->value = count;
 
   schedule();
 
