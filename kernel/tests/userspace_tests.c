@@ -156,10 +156,8 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-if(true == false){
-    pid = start(test_7, 0, 128, "test_7", 0);
-    waitpid(pid, NULL);
-}
+  pid = start(test_7, 0, 128, "test_7", 0);
+  waitpid(pid, NULL);
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
