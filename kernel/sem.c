@@ -59,11 +59,11 @@ static link          free_list;
 void sem_init(void)
 {
   free_list = (link)LIST_HEAD_INIT(free_list);
-  for (int i = MAXNBR_SEM - 1; i >= 0; --i) {
+  for (int i = 0; i < MAXNBR_SEM; ++i) {
     struct semaph *sem = &list_sem[i];
     sem->sid = i;
     sem->in_use = false;
-    queue_add(sem, &free_list, struct semaph, node, sid);
+    queue_add(sem, &free_list, struct semaph, node, in_use);
   }
 }
 
@@ -72,7 +72,7 @@ int screate(short int count)
   if (count < 0) return -1;
   if (queue_empty(&free_list)) return -1;
 
-  struct semaph *sem = queue_bottom(&free_list, struct semaph, node);
+  struct semaph *sem = queue_top(&free_list, struct semaph, node);
   sem->blocked = (link)LIST_HEAD_INIT(sem->blocked);
   sem->value = count;
   queue_del(sem, node);
@@ -98,7 +98,7 @@ int sdelete(int sem)
 
   queue_del(&list_sem[sem], node);
   list_sem[sem].in_use = false;
-  queue_add(&list_sem[sem], &free_list, struct semaph, node, sid);
+  queue_add(&list_sem[sem], &free_list, struct semaph, node, in_use);
 
   if (sched) schedule();
 

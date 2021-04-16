@@ -77,11 +77,11 @@ static link                 unused_queues;
 void mq_init(void)
 {
   unused_queues = (link)LIST_HEAD_INIT(unused_queues);
-  for (int i = NBQUEUE - 1; i >= 0; --i) {
+  for (int i = 0; i < NBQUEUE; ++i) {
     struct message_queue *mq = &queue_tab[i];
     mq->fid = i;
     mq->in_use = false;
-    queue_add(mq, &unused_queues, struct message_queue, node, fid);
+    queue_add(mq, &unused_queues, struct message_queue, node, in_use);
   }
 }
 
@@ -91,7 +91,7 @@ int pcreate(int count)
   if (queue_empty(&unused_queues)) return -1;
 
   struct message_queue *mq =
-      queue_bottom(&unused_queues, struct message_queue, node);
+      queue_top(&unused_queues, struct message_queue, node);
   mq->buffer = mem_alloc(sizeof(int) * count);
   if (mq->buffer == NULL) return -1;
   mq->lenght = count;
@@ -205,7 +205,8 @@ int pdelete(int fid)
   // place queue back in the free list
   queue_del(&queue_tab[fid], node);
   queue_tab[fid].in_use = false;
-  queue_add(&queue_tab[fid], &unused_queues, struct message_queue, node, fid);
+  queue_add(
+      &queue_tab[fid], &unused_queues, struct message_queue, node, in_use);
 
   // yield in case there were higher priority process waiting
   schedule();

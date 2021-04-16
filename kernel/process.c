@@ -49,7 +49,7 @@ extern void sem_process_chprio(struct proc *p);
  * Returns at-the-end shared space address on sucess, otherwise zero.
  */
 extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
-extern void shm_process_destroy(struct proc *proc);
+extern void     shm_process_destroy(struct proc *proc);
 
 /*******************************************************************************
  * Macros
@@ -148,11 +148,11 @@ void process_init(void)
   ready_procs = (link)LIST_HEAD_INIT(ready_procs);
   free_procs = (link)LIST_HEAD_INIT(free_procs);
   sleeping_procs = (link)LIST_HEAD_INIT(sleeping_procs);
-  for (int i = NBPROC; i >= 1; --i) { // all other procs begin dead
+  for (int i = 1; i <= NBPROC; ++i) { // all other procs begin dead
     struct proc *proc = &process_table[i];
     *proc = (struct proc){.pid = i};
     proc->state = DEAD;
-    queue_add(proc, &free_procs, struct proc, node, pid);
+    queue_add(proc, &free_procs, struct proc, node, state);
   }
 
   // setup fault handllers
@@ -186,7 +186,7 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
 
   // bail out when we can't find a free slot in the process table
   if (queue_empty(&free_procs)) return -1;
-  struct proc *new_proc = queue_bottom(&free_procs, struct proc, node);
+  struct proc *new_proc = queue_top(&free_procs, struct proc, node);
 
   // otherwise start setting it up
   assert(new_proc->pid == new_proc - process_table);
@@ -586,7 +586,7 @@ static void destroy(struct proc *proc)
 
   // add it to the free list
   proc->state = DEAD;
-  queue_add(proc, &free_procs, struct proc, node, pid);
+  queue_add(proc, &free_procs, struct proc, node, state);
 }
 
 static void idle(void)
