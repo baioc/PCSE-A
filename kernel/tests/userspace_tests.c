@@ -114,12 +114,6 @@ static int proc14_2(void *arg);
 
 static int test_15_sem(void *arg);
 
-/*
-static int test_16_sem(void *arg);
-static unsigned long test16_1(void);
-static int proc16_1(void *arg);
-*/
-
 static int test_17_sem(void *arg);
 static int proc17_1(void *arg);
 static int proc17_2(void *arg);
@@ -131,6 +125,9 @@ static int proc_16_3_msg(void *arg);
 
 static int proc_return(void *arg);
 static int test_17_msg(void *arg);
+
+static int test_20(void *arg);
+static int launch_philo(void *arg);
 
 static int test_21(void *arg);
 static int shm_checker(void *arg);
@@ -159,8 +156,10 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_5, 0, 128, "test_5", 0);
   waitpid(pid, NULL);
-  pid = start(test_7, 0, 128, "test_7", 0);
-  waitpid(pid, NULL);
+if(true == false){
+    pid = start(test_7, 0, 128, "test_7", 0);
+    waitpid(pid, NULL);
+}
   pid = start(test_8, 0, 128, "test_8", 0);
   waitpid(pid, NULL);
   pid = start(test_10_sem, 0, 128, "test_10_sem", 0);
@@ -185,15 +184,15 @@ void run_userspace_tests()
   waitpid(pid, NULL);
   pid = start(test_15_sem, 0, 128, "test_15_sem", 0);
   waitpid(pid, NULL);
-  /*pid = start(test_16_sem, 0, 128, "test_16_sem", 0);
-  waitpid(pid, NULL);*/
   pid = start(test_16_msg, 0, 128, "test_16_msg", 0);
   waitpid(pid, NULL);
   pid = start(test_17_msg, 0, 128, "test_17_msg", 0);
   waitpid(pid, NULL);
-  pid = start(test_21, 0, 128, "test_21", 0);
-  waitpid(pid, NULL);
   pid = start(test_17_sem, 0, 128, "test_17_sem", 0);
+  waitpid(pid, NULL);
+  pid = start(test_20, 0, 128, "test_20", 0);
+  waitpid(pid, NULL);
+  pid = start(test_21, 0, 128, "test_21", 0);
   waitpid(pid, NULL);
 }
 
@@ -1499,181 +1498,6 @@ static int test_15_msg(void *arg)
 /*-----------------*
  *      Test 16
  *-----------------*/
- /*
- #define NBSEMS 10000
-
- typedef unsigned long long uint_fast64_t;
- typedef unsigned long uint_fast32_t;
-
- static const uint_fast64_t _multiplier = 0x5DEECE66DULL;
- static const uint_fast64_t _addend = 0xB;
- static const uint_fast64_t _mask = (1ULL << 48) - 1;
- static uint_fast64_t _seed = 1;
-
- unsigned long long div64(unsigned long long x, unsigned long long div, unsigned long long *rem)
- {
-         unsigned long long mul = 1;
-         unsigned long long q;
-
-         if ((div > x) || !div) {
-                 if (rem) *rem = x;
-                 return 0;
-         }
-
-         while (!((div >> 32) & 0x80000000ULL)) {
-                 unsigned long long newd = div + div;
-                 if (newd > x) break;
-                 div = newd;
-                 mul += mul;
-         }
-
-         q = mul;
-         x -= div;
-         while (1) {
-                 mul /= 2;
-                 div /= 2;
-                 if (!mul) {
-                         if (rem) *rem = x;
-                         return q;
-                 }
-                 if (x < div) continue;
-                 q += mul;
-                 x -= div;
-         }
- }
-
- static unsigned long long mul64(unsigned long long x, unsigned long long y)
- {
-         unsigned long a, b, c, d, e, f, g, h;
-         unsigned long long res = 0;
-         a = x & 0xffff;
-         x >>= 16;
-         b = x & 0xffff;
-         x >>= 16;
-         c = x & 0xffff;
-         x >>= 16;
-         d = x & 0xffff;
-         e = y & 0xffff;
-         y >>= 16;
-         f = y & 0xffff;
-         y >>= 16;
-         g = y & 0xffff;
-         y >>= 16;
-         h = y & 0xffff;
-         res = d * e;
-         res += c * f;
-         res += b * g;
-         res += a * h;
-         res <<= 16;
-         res += c * e;
-         res += b * f;
-         res += a * g;
-         res <<= 16;
-         res += b * e;
-         res += a * f;
-         res <<= 16;
-         res += a * e;
-         return res;
- }
-
- static uint_fast32_t randBits(int _bits)
- {
-         uint_fast32_t rbits;
-         uint_fast64_t nextseed = (mul64(_seed, _multiplier) + _addend) & _mask;
-         _seed = nextseed;
-         rbits = nextseed >> 16;
-         return rbits >> (32 - _bits);
- }
-
- short randShort()
- {
-         return randBits(15);
- }
-
- void setSeed(uint_fast64_t _s)
- {
-         _seed = _s;
- }
-
- static int test_16_sem(void *arg)
- {
-         int pid;
-         (void)arg;
-         pid = start(proc16_1, 4000 + NBSEMS * 4, 128, "proc16_1", 0);
-         assert(pid > 0);
-         assert(waitpid(pid, 0) == pid); // Bloque ici
-         return 0;
- }
-
- static unsigned long test16_1(void)
- {
-         unsigned long long tsc, tsc1, tsc2;
-         unsigned long count = 0;
-
-         __asm__ __volatile__("rdtsc":"=A"(tsc1));
-         tsc2 = tsc1 + 1000000000;
-         assert(tsc1 < tsc2);
-         do {
-                 unsigned i;
-                 test_it();
-                 for (i=0; i<100; i++) {
-                         int sem1 = screate(2);
-                         int sem2 = screate(1);
-                         assert(sem1 >= 0);
-                         assert(sem2 >= 0);
-                         assert(sem1 != sem2);
-                         assert(sdelete(sem1) == 0);
-                         assert(sdelete(sem2) == 0);
-                 }
-                 __asm__ __volatile__("rdtsc":"=A"(tsc));
-                 count += 2 * i;
-
-         } while (tsc < tsc2);
-         return (unsigned long)div64(tsc - tsc1, count, 0);
- }
-
- static int proc16_1(void *arg)
- {
-         int sems[NBSEMS];
-         int i;
-         unsigned long c1, c2;
-         unsigned long long seed;
-
-         (void)arg;
-
-         c1 = test16_1();
-         printf("%lu ", c1);
-         __asm__ __volatile__("rdtsc":"=A"(seed));
-         setSeed(seed);
-         for (i=0; i<NBSEMS; i++) {
-                 int sem = screate(randShort());
-                 if (sem < 0) assert(!"*** Increase the semaphore capacity of your system to NBSEMS to pass this test. ***");
-                 sems[i] = sem;
-         }
-         if (screate(0) >= 0) assert(!"*** Decrease the semaphore capacity of your system to NBSEMS to pass this test. ***");
-         assert(sdelete(sems[NBSEMS/3]) == 0);
-         assert(sdelete(sems[(NBSEMS/3)*2]) == 0);
-         c2 = test16_1();
-         printf("%lu ", c2);
-         setSeed(seed);
-         for (i=0; i<NBSEMS; i++) {
-                 // Plante à i = 7730
-                 short randVal = randShort();
-                 if ((i != (NBSEMS/3)) && (i != (2*(NBSEMS/3)))) {
-                         assert(scount(sems[i]) == randVal);
-                         if(i == 7730){
-                           printf("On y est\n");
-                         }
-                         assert(sdelete(sems[i]) == 0);
-                 }
-         }
-         if (c2 < 2 * c1)
-                 printf("ok.\n");
-         else
-                 printf("Bad algorithm complexity in semaphore allocation.\n");
-         return 0;
- }
-*/
 
 static int proc_16_1_msg(void *arg)
 {
@@ -2042,7 +1866,187 @@ static int test_16_msg(void *arg)
 /*-----------------*
  *      Test 20
  *-----------------*/
-// TODO: Add test_20 when semaphore and shared memory are available
+#define NR_PHILO 5
+
+ struct philo {
+         char f[NR_PHILO]; /* tableau des fourchettes, contient soit 1 soit 0 selon si elle
+                              est utilisee ou non */
+         char bloque[NR_PHILO]; /* memorise l'etat du philosophe, contient 1 ou 0 selon que le philosophe
+                                   est en attente d'une fourchette ou non */
+         /* Padding pour satisfaire un compilateur strict. */
+         char padding[sizeof(int) - (NR_PHILO * 2) % sizeof(int)];
+         union sem mutex_philo; /* exclusion mutuelle */
+         union sem s[NR_PHILO]; /* un semaphore par philosophe */
+         int etat[NR_PHILO];
+ };
+
+ static int test_20(void *arg)
+ {
+         int j, pid;
+         struct philo *p;
+
+         (void)arg;
+
+         p = (struct philo*) shm_create("shm_philo");
+         assert(p != (void*)0);
+
+         xscreate(&p->mutex_philo); /* semaphore d'exclusion mutuelle */
+         xsignal(&p->mutex_philo);
+         for (j = 0; j < NR_PHILO; j++) {
+                 xscreate(p->s + j); /* semaphore de bloquage des philosophes */
+                 p->f[j] = 0;
+                 p->bloque[j] = 0;
+                 p->etat[j] = '-';
+         }
+
+         printf("\n");
+         pid = start(launch_philo, 4000, 193, "launch_philo", 0);
+         assert(pid > 0);
+         assert(waitpid(pid, 0) == pid);
+         printf("\n");
+         xsdelete(&p->mutex_philo);
+         for (j = 0; j < NR_PHILO; j++) {
+                 xsdelete(p->s + j);
+         }
+         shm_release("shm_philo");
+         return 0;
+ }
+
+ static void affiche_etat(struct philo *p)
+ {
+         int i;
+         printf("%c", 13);
+         for (i=0; i<NR_PHILO; i++) {
+                 unsigned long c;
+                 switch (p->etat[i]) {
+                         case 'm':
+                                 c = 2;
+                                 break;
+                         default:
+                                 c = 4;
+                 }
+                 (void)c;
+                 printf("%c", p->etat[i]);
+         }
+ }
+
+ static void waitloop(void)
+ {
+         int j;
+         for (j = 0; j < 5000; j++) {
+                 int l;
+                 test_it();
+                 for (l = 0; l < 5000; l++);
+         }
+ }
+
+ static void penser(struct philo *p, long i)
+ {
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = 'p';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         waitloop();
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static void manger(struct philo *p, long i)
+ {
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = 'm';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         waitloop();
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static int test(struct philo *p, int i)
+ {
+         /* les fourchettes du philosophe i sont elles libres ? */
+         return ((!p->f[i] && (!p->f[(i + 1) % NR_PHILO])));
+ }
+
+ static void prendre_fourchettes(struct philo *p, int i)
+ {
+         /* le philosophe i prend des fourchettes */
+
+         xwait(&p->mutex_philo); /* Debut SC */
+
+         if (test(p, i)) {  /* on tente de prendre 2 fourchette */
+                 p->f[i] = 1;
+                 p->f[(i + 1) % NR_PHILO] = 1;
+                 xsignal(&p->s[i]);
+         } else
+                 p->bloque[i] = 1;
+
+         xsignal(&p->mutex_philo); /* FIN SC */
+         xwait(&p->s[i]); /* on attend au cas o on ne puisse pas prendre 2 fourchettes */
+ }
+
+ static void poser_fourchettes(struct philo *p, int i)
+ {
+
+         xwait(&p->mutex_philo); /* DEBUT SC */
+
+         if ((p->bloque[(i + NR_PHILO - 1) % NR_PHILO]) && (!p->f[(i + NR_PHILO - 1) % NR_PHILO])) {
+                 p->f[(i + NR_PHILO - 1) % NR_PHILO] = 1;
+                 p->bloque[(i + NR_PHILO - 1) % NR_PHILO] = 0;
+                 xsignal(&p->s[(i + NR_PHILO - 1) % NR_PHILO]);
+         } else
+                 p->f[i] = 0;
+
+         if ((p->bloque[(i + 1) % NR_PHILO]) && (!p->f[(i + 2) % NR_PHILO])) {
+                 p->f[(i + 2) % NR_PHILO] = 1;
+                 p->bloque[(i + 1) % NR_PHILO] = 0;
+                 xsignal(&p->s[(i + 1) % NR_PHILO]);
+         } else
+                 p->f[(i + 1) % NR_PHILO] = 0;
+
+         xsignal(&p->mutex_philo); /* Fin SC */
+ }
+
+ static int philosophe(void *arg)
+ {
+         /* comportement d'un seul philosophe */
+         int i = (int) arg;
+         int k;
+         struct philo *p;
+
+         p = shm_acquire("shm_philo");
+         assert(p != (void*)0);
+
+         for (k = 0; k < 6; k++) {
+                 prendre_fourchettes(p, i); /* prend 2 fourchettes ou se bloque */
+                 manger(p, i); /* le philosophe mange */
+                 poser_fourchettes(p, i); /* pose 2 fourchettes */
+                 penser(p, i); /* le philosophe pense */
+         }
+         xwait(&p->mutex_philo); /* DEBUT SC */
+         p->etat[i] = '-';
+         affiche_etat(p);
+         xsignal(&p->mutex_philo); /* Fin SC */
+         shm_release("shm_philo");
+         return 0;
+ }
+
+ static int launch_philo(void *arg)
+ {
+         int i, pid;
+
+         (void)arg;
+
+         for (i = 0; i < NR_PHILO; i++) {
+                 pid = start(philosophe, 4000, 192, "philosophe", (void *) i);
+                 assert(pid > 0);
+         }
+         return 0;
+ }
 
 /*-----------------*
  *      Test 21

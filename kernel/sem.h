@@ -17,10 +17,11 @@
  /*******************************************************************************
   * Macros
   ******************************************************************************/
-  #define MAXNBR_SEM 10000
+  #define MAXNBR_SEM 256
  /*******************************************************************************
   * Types
   ******************************************************************************/
+  // Represents a semaphore
   struct _semaph{
     short int sid;
     short int count;
@@ -28,6 +29,13 @@
   };
   typedef struct _semaph semaph;
 
+  // Represents an sid index, to manage indexes requiered by sem
+  struct _sid_queue {
+    short int id;
+    int       prio;
+    link      node_sid;
+  };
+  typedef struct _sid_queue sid_queue;
  /*******************************************************************************
   * Internal function declaration
   ******************************************************************************/
@@ -37,6 +45,14 @@
  /*******************************************************************************
   * Public function
   ******************************************************************************/
+  /*
+  This function is called only one time, in process_init from process.c
+  It init the lists of used and unused id (used_sid will remain empty of
+  course)
+  It is useful to know which sids are used by active semaphore and which
+  are unused
+  */
+  void init_indice_sem();
   /*
   Create a semaphore
   */
