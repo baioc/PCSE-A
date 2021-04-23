@@ -60,21 +60,48 @@ SERV_EXC_TASK(30)
 SERV_EXC_TASK(31)
 
 
-#define DEFINE_INTERRUPT_HANDLER(FUNCTION)                         \
-	.text;                                                         \
-	.globl FUNCTION##_handler;                                     \
-FUNCTION##_handler:                                                \
-	/* save scratch registers (eflags is handled automatically) */ \
-	pushl %eax;                                                    \
-	pushl %edx;                                                    \
-	pushl %ecx;                                                    \
-	/* call the actual handler code (saves non-scratch regs) */    \
-	call FUNCTION;                                                 \
-	/* restore registers */                                        \
-	popl %ecx;                                                     \
-	popl %edx;                                                     \
-	popl %eax;                                                     \
-	/* return from the interrupt handler */                        \
+/* NOTE: these handlers are evoked by intr gates, so interrupts are disabled */
+#define DEFINE_INTERRUPT_HANDLER(FUNCTION)                                   \
+	.text;                                                                   \
+	.globl FUNCTION##_handler;                                               \
+FUNCTION##_handler:                                                          \
+	/* call actual handler (also save all scratch registers) */              \
+	pushl %eax;                                                              \
+	pushl %edx;                                                              \
+	pushl %ecx;                                                              \
+	call FUNCTION;                                                           \
+	popl %ecx;                                                               \
+	popl %edx;                                                               \
+	popl %eax;                                                               \
+	/* return re-enables interrupts */                                       \
 	iret
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
+
+/* XXX: these may push an error code into the stack, but since we only handle
+faults to terminate a process, we don't need to worry about popping the error
+code before returning: we never return. handlers defined in process.c */
+DEFINE_INTERRUPT_HANDLER(divide_error)
+DEFINE_INTERRUPT_HANDLER(protection_exception)
+DEFINE_INTERRUPT_HANDLER(page_fault)
+
+
+/* Syscall parameter handler: simply passes reified args to do_syscall() */
+	.text
+	.globl syscall_handler
+syscall_handler:
+	/* push args in reverse order */
+	pushl %edi
+	pushl %esi
+	pushl %edx
+	pushl %ecx
+	pushl %ebx
+	pushl %eax
+	call do_syscall
+	add $4, %esp /* eax */
+	popl %ebx
+	popl %ecx
+	popl %edx
+	popl %esi
+	popl %edi
+	iret

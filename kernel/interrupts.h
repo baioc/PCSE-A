@@ -18,6 +18,10 @@
  * Macros
  ******************************************************************************/
 
+/// Privilege levels.
+#define PL_KERNEL 0
+#define PL_USER   3
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
@@ -30,8 +34,12 @@
  * Prototypes
  ******************************************************************************/
 
-/// Initializes IDT entry, configuring interrupt NUM to be treated by HANDLER.
-void set_interrupt_handler(int num, void (*handler)(void));
+/**
+ * Initializes an IDT entry, configuring interrupt NUM to be treated by HANDLER
+ * with PL privilege level (if a software interrupt can be triggered in
+ * userspace, this should be PL_USER, otherwise use PL_KERNEL).
+ */
+void set_interrupt_handler(int num, void (*handler)(void), unsigned char pl);
 
 /// Disables (MASK = true) or enables (MASK = false) the given IRQ channel.
 void mask_irq(int irq, bool mask);

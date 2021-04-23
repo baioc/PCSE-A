@@ -69,23 +69,12 @@ void console_init(void)
   efface_ecran();
 }
 
-/* affiche une chaine de caractères à la position courante du curseur */
-void console_putbytes(const char *s, int len)
+int cons_write(const char *str, long size)
 {
-  for (int i = 0; i < len; i++) {
-    traite_car(s[i], CL_NOIR, CL_CYAN | CL_LIGHT);
+  for (long i = 0; i < size; i++) {
+    traite_car(str[i], CL_NOIR, CL_CYAN | CL_LIGHT);
   }
-}
-
-/* affichage a une possition fixe */
-void console_write_raw(const char *s, int len, int line, int column)
-{
-  if (line >= CONSOLE_H || column >= CONSOLE_L) return;
-  const int maxc = CONSOLE_L - line;
-
-  for (int i = 0; i < maxc && i < len; i++) {
-    ecrit_car(line, column + i, s[i], CL_NOIR, CL_MARRON | CL_LIGHT);
-  }
+  return size;
 }
 
 /*******************************************************************************

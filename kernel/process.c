@@ -2,7 +2,7 @@
  * process.c
  *
  *  Created on: 11/02/2021
- *      Authors: Antoine Briançon, Thibault Cantori, baioc
+ *      Authors: Antoine Briançon, Thibault Cantori, baioc, Maxime Martin
  */
 
 /*******************************************************************************
@@ -10,100 +10,157 @@
  ******************************************************************************/
 
 #include "process.h"
+#include "pm.h"
 
-/*******************************************************************************
- * Types
- ******************************************************************************/
-typedef struct _proc proc;
-typedef struct _context context;
+#include "stddef.h"
+#include "debug.h"
+#include "cpu.h"
+#include "queue.h"
+#include "mem.h"
+#include "string.h"
+#include "clock.h"
+#include "userspace_apps.h"
+#include "interrupts.h"
+#include "stdio.h"
+
+/// Changes context between two processes. @[switch.S]
+extern void switch_context(uint32_t *old, uint32_t *new);
+
+/// Forges an interrupt stack and IRETs to userspace. @[switch.S]
+extern void switch_mode_user(uint32_t ip, uint32_t sp, uint32_t *pgdir);
+
+extern void divide_error_handler(void);
+extern void protection_exception_handler(void);
+extern void page_fault_handler(void);
+
+// @[mqueue.c]
+extern void mq_process_init(struct proc *p);
+extern void mq_process_destroy(struct proc *p);
+extern void mq_process_chprio(struct proc *p);
+
+// @[sem.c]
+extern void sem_process_init(struct proc *p);
+extern void sem_process_destroy(struct proc *p);
+extern void sem_process_chprio(struct proc *p);
+
+// @[shm.c]
+/**
+ * Initializes shared page structures at a given virtual address.
+ * Returns at-the-end shared space address on sucess, otherwise zero.
+ */
+extern uint32_t shm_process_init(struct proc *proc, uint32_t shm_begin);
+extern void     shm_process_destroy(struct proc *proc);
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
 
-/// Scheduling quantum, in tick units.
+// Total number of kenel processes.
+#define NBPROC 1024
+
+// Kernel stack size, in words.
+#define KERNEL_STACK_SIZE 512
+
+// Scheduling frequency in Hz, meaning a quantum has 1/SCHEDFREQ seconds.
+#define SCHEDFREQ 50
+
+// Scheduling quantum, in tick units.
 #define QUANTUM (CLOCKFREQ / SCHEDFREQ)
+
+/*******************************************************************************
+ * Types
+ ******************************************************************************/
 
 /*******************************************************************************
  * Internal function declaration
  ******************************************************************************/
 
-/// Changes context between two processes, defined in ctx_sw.S
-extern void ctx_sw(context *old, context *new);
-
-/// Defined in ctx_sw.S, this is called when a process implicitly exits.
-extern void proc_exit(void);
-
-// Starts 'init', enables interrupts and loops indefinitely.
+// Starts "init", enables interrupts and loops indefinitely.
 static void idle(void);
 
-// Process tree root that acts as a zombie reaper daemon.
-static int init(void *);
-
 // Sets P as the parent of C and adds C to P's children list.
-static void filiate(proc *c, proc *p);
+static void filiate(struct proc *c, struct proc *p);
 
 // Zombifies a process without freeing its resources.
-static void zombify(proc *p, int retval);
+static void zombify(struct proc *proc, int retval);
 
 /*
  * Kills a zombie process once and for all.
  * This means freeing any resources it owns, and moving it to the free list.
  * NOTE: this also removes the process from its parent's children list.
  */
-static void destroy(proc *p);
+static void destroy(struct proc *proc);
 
-static int run_simple_processes();
-
-static int run_test_processes(void *arg);
+/**
+ * Maps, on a process PROC's page directory, enough virtual memory for at least
+ * SIZE bytes starting at the virtual address BASE. When CONTENTS is not null,
+ * this will also copy SIZE bytes from that address into the mapped region.
+ * BASE must be a page-aligned address.
+ *
+ * Note that this procedure will acquire physical pages for the allocated
+ * region, as well as for any needed page tables, while applying user flags to
+ * these page dir/table entries.
+ *
+ * On success, returns the highest mapped virtual address (so that+1 gives the
+ * next page-aligned unmapped virtual address that could be used for subsequent
+ * regions), otherwise returns 0 (and the page directory is now invalid).
+ */
+static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
+                            const void *contents, unsigned flags);
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
+// Kernel page directory.
+extern unsigned pgdir[];
+
 // Table of ALL processes, indexed by their pid.
-static proc process_table[NBPROC + 1];
+static struct proc process_table[NBPROC + 1];
 
+// Special kernel "idle" process.
 #define IDLE_PROC (&process_table[0])
-#define INIT_PROC (&process_table[1])
 
-// Current process running on processor.
-proc *current_process = NULL;
+// Special user "init" process.
+static struct proc *INIT_PROC = NULL;
 
-// Semaphore list
-extern semaph list_sem[MAXNBR_SEM];
-link free_procs;
-link sleeping_procs;
-link ready_procs;
+// Current running process.
+static struct proc *current_process = NULL;
+
+// Process disjoint lists.
+static link ready_procs;
+static link free_procs;
+static link sleeping_procs;
 
 /*******************************************************************************
  * Public function
  ******************************************************************************/
 
-void process_init(void) // only called from kernel space
+void process_init(void)
 {
-  // set up initial kernel process, 'idle', which has pid 0
+  // set up initial kernel process "idle"
   *IDLE_PROC =
-      (proc){.name = "idle", .pid = 0, .priority = 0, .parent = NULL};
+      (struct proc){.pid = 0, .name = "idle", .priority = 0, .parent = NULL};
   IDLE_PROC->children = (link)LIST_HEAD_INIT(IDLE_PROC->children);
+  IDLE_PROC->ctx.page_dir = (uint32_t)pgdir;
 
   // initialize process lists
   ready_procs = (link)LIST_HEAD_INIT(ready_procs);
   free_procs = (link)LIST_HEAD_INIT(free_procs);
   sleeping_procs = (link)LIST_HEAD_INIT(sleeping_procs);
   for (int i = 1; i <= NBPROC; ++i) { // all other procs begin dead
-    proc *p = &process_table[i];
-    *p = (proc){.pid = i};
-    p->state = DEAD;
-    queue_add(p, &free_procs, proc, node, pid);
+    struct proc *proc = &process_table[i];
+    *proc = (struct proc){.pid = i};
+    proc->state = DEAD;
+    queue_add(proc, &free_procs, struct proc, node, state);
   }
 
-  //initialize the gestion of message queues
-  init_indice_gestion_list();
+  // setup fault handllers
+  set_interrupt_handler(0, divide_error_handler, PL_KERNEL);
+  set_interrupt_handler(13, protection_exception_handler, PL_KERNEL);
+  set_interrupt_handler(14, page_fault_handler, PL_KERNEL);
 
-  //initialize the gestion of semaphores
-  init_indice_sem();
-
-  // idle is the first process to run
+  // idle must be the first process to run
   current_process = IDLE_PROC;
   IDLE_PROC->state = ACTIVE;
   IDLE_PROC->time.quantum = 0;
@@ -112,65 +169,96 @@ void process_init(void) // only called from kernel space
 
 void process_tick(void)
 {
-  // assuming this is only called from ISRs, we're already in kernel space
   assert(current_process->state == ACTIVE);
-
-  if (current_process->time.quantum == 0 ||
-      --current_process->time.quantum == 0) {
-    schedule();
-  }
+  if (current_process->time.quantum-- == 0) schedule();
 }
 
-int start(int (*pt_func)(void *), unsigned long ssize, int prio,
-          const char *name, void *arg)
+int start(const char *name, unsigned long ssize, int prio, void *arg)
 {
-  assert(pt_func != NULL);
-  (void)ssize;
+  const struct uapps *app = uapp_get(name);
+  if (app == NULL) return -1;
   if (prio < 1 || prio > MAXPRIO) return -1;
-  assert(name != NULL);
 
-  // bail when we can't find a free slot in the process table
+  // make sure stack calculation does not overflow and add padding
+  const unsigned ssize_padding = 2 * sizeof(uint32_t);
+  if (ssize > MMAP_STACK_END - ssize_padding) return -1;
+  ssize += ssize_padding;
+
+  // bail out when we can't find a free slot in the process table
   if (queue_empty(&free_procs)) return -1;
-  proc *new_proc = queue_bottom(&free_procs, proc, node);
+  struct proc *new_proc = queue_top(&free_procs, struct proc, node);
 
-  // otherwise set-up its pid (implicit) and priority (explicit)
-  new_proc->pid = new_proc - process_table; // calculate index from pointer
+  // otherwise start setting it up
+  assert(new_proc->pid == new_proc - process_table);
   new_proc->priority = prio;
+  new_proc->name = (char *)app->name; // make sure to use kernelspace string
 
-  new_proc->next_sending_message = -1;
-  new_proc->next_receiving_message = 0;
-  new_proc->m_queue_fid = -1;
-  new_proc->m_queue_rd_send = 0;
-  new_proc->m_queue_rd_receive = 0;
+  // allocate kernel stack
+  new_proc->kernel_stack = mem_alloc(KERNEL_STACK_SIZE * sizeof(int));
+  if (new_proc->kernel_stack == NULL) return -1;
+  new_proc->ctx.esp0 = (uint32_t)&new_proc->kernel_stack[KERNEL_STACK_SIZE];
 
-  // copy name
-  new_proc->name = mem_alloc((strlen(name) + 1) * sizeof(char));
-  if (new_proc->name == NULL) {
-    return -1;
-  }
-  strcpy(new_proc->name, name);
+  // initialize frame list and pagedir (copy kernel's first 64 pgdir entries)
+  new_proc->pages = page_alloc();
+  if (new_proc->pages == NULL) goto FAIL_FREE_STACK;
+  new_proc->pages->next = NULL;
+  new_proc->ctx.page_dir = new_proc->pages->frame * PAGE_SIZE;
+  memcpy((uint32_t *)new_proc->ctx.page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
-  // allocate stack
-  new_proc->kernel_stack = mem_alloc(STACK_SIZE * sizeof(int));
-  if (new_proc->kernel_stack == NULL) {
-    mem_free(new_proc->name, (strlen(new_proc->name) + 1) * sizeof(char));
-    return -1;
-  }
+  // map and copy application code into process virtual memory
+  const uint32_t app_last = mmap_region(new_proc,
+                                        MMAP_USER_START,
+                                        (char *)app->end - (char *)app->start,
+                                        app->start,
+                                        PAGE_FLAGS_USER_RW);
+  if (app_last == 0) goto FAIL_FREE_PAGES;
 
-  // setup stack with the given arg, termination code and main function
-  new_proc->kernel_stack[STACK_SIZE - 1] = (unsigned)(arg);
-  new_proc->kernel_stack[STACK_SIZE - 2] = (unsigned)(proc_exit);
-  new_proc->kernel_stack[STACK_SIZE - 3] = (unsigned)(pt_func);
-  new_proc->ctx.esp = (unsigned)(&(new_proc->kernel_stack[STACK_SIZE - 3]));
+  // set up shared memory after user data
+  const uint32_t shm_end = shm_process_init(new_proc, app_last + 1);
+  if (shm_end == 0) goto FAIL_FREE_PAGES;
+
+  // allocate and map user stack
+  uint32_t stack_first = MMAP_STACK_END - ssize;
+  stack_first -= stack_first % PAGE_SIZE; // round down to page-aligned address
+  // we don't use the entire memory space, so heap and stack can't really
+  // bump into each other, but we'll add the check anyway while making sure
+  // there's at least one unmapped page between them (to catch stack overflows)
+  if (stack_first - PAGE_SIZE <= shm_end) goto FAIL_FREE_PAGES;
+  const uint32_t stack_last = mmap_region(new_proc,
+                                          stack_first,
+                                          MMAP_STACK_END - stack_first,
+                                          NULL,
+                                          PAGE_FLAGS_USER_RW);
+  if (stack_last == 0) goto FAIL_FREE_PAGES;
+  assert(stack_last == MMAP_STACK_END - 1);
+
+  // setup initial user stack with the given arg
+  uint32_t *stack_bottom =
+      translate((uint32_t *)new_proc->ctx.page_dir, MMAP_STACK_END - 4);
+  assert(stack_bottom != NULL);
+  stack_bottom[0] = (uint32_t)arg;
+  stack_bottom[-1] = (uint32_t)NULL; // acts as padding to get arg in 4(%esp)
+
+  // setup kernel stack that moves to userspace on RET
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 1] = new_proc->ctx.page_dir;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 2] = MMAP_STACK_END - 2 * 4;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 3] = MMAP_USER_START;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 4] = (uint32_t)NULL;
+  new_proc->kernel_stack[KERNEL_STACK_SIZE - 5] = (uint32_t)switch_mode_user;
+  new_proc->ctx.esp = (uint32_t)&new_proc->kernel_stack[KERNEL_STACK_SIZE - 5];
 
   // initialize children list and filiate itself to parent
   new_proc->children = (link)LIST_HEAD_INIT(new_proc->children);
   filiate(new_proc, current_process);
 
+  // additional initialization subroutines
+  mq_process_init(new_proc);
+  sem_process_init(new_proc);
+
   // this process is now ready to run
   queue_del(new_proc, node);
   new_proc->state = READY;
-  queue_add(new_proc, &ready_procs, proc, node, priority);
+  queue_add(new_proc, &ready_procs, struct proc, node, priority);
 
   // check if the new process should be run immediately or not
   if (current_process != IDLE_PROC && current_process != INIT_PROC &&
@@ -180,49 +268,62 @@ int start(int (*pt_func)(void *), unsigned long ssize, int prio,
   }
 
   return new_proc->pid;
+
+FAIL_FREE_PAGES:
+  while (new_proc->pages != NULL) {
+    struct page *page = new_proc->pages;
+    new_proc->pages = page->next;
+    page_free(page);
+  }
+FAIL_FREE_STACK:
+  mem_free(new_proc->kernel_stack, KERNEL_STACK_SIZE * sizeof(int));
+  return -1;
 }
 
 int chprio(int pid, int newprio)
 {
   // process referenced by that pid doesn't exist, or newprio is invalid
-  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) {
-    return -1;
-  }
+  if (pid < 1 || pid > NBPROC || newprio < 1 || newprio > MAXPRIO) return -1;
 
-  proc *p = &process_table[pid];
-  if (p->state == DEAD || p->state == ZOMBIE) return -1;
+  struct proc *proc = &process_table[pid];
+  if (proc->state == DEAD || proc->state == ZOMBIE) return -1;
 
-  const int old_prio = p->priority;
+  const int old_prio = proc->priority;
   if (newprio == old_prio) return old_prio; // change priority only if needed
 
-  p->priority = newprio;
+  proc->priority = newprio;
 
-  switch (p->state) {
+  switch (proc->state) {
   case ACTIVE: { // check whether current process shouldn't be running anymore
-    const proc *top = queue_top(&ready_procs, proc, node);
+    const struct proc *top = queue_top(&ready_procs, struct proc, node);
+    assert(top != NULL);
     if (current_process->priority < top->priority) schedule();
     break;
   }
+
   case READY: // re-add process to ready queue with new priority
-    queue_del(p, node);
-    queue_add(p, &ready_procs, proc, node, priority);
-    if (p->priority > current_process->priority) schedule();
+    queue_del(proc, node);
+    queue_add(proc, &ready_procs, struct proc, node, priority);
+    if (proc->priority > current_process->priority) schedule();
     break;
+
   case AWAITING_IO:
-    changing_proc_prio(p);
+    mq_process_chprio(proc);
     break;
-  // new priority will take effect when it wakes up
+
   case BLOCKED:
-    queue_del(p, blocked);    // remove process from the blocked list
-    queue_add(p, &(list_sem[p->sid].list_blocked), proc, blocked, priority);
-    // place it again with the updated priority
+    sem_process_chprio(proc);
     break;
+
+  // new priority will take effect when it wakes up
   case AWAITING_CHILD:
   case SLEEPING:
-  case ZOMBIE:
     break;
-  case DEAD: // unreachable
-    assert(false);
+
+  // unreachable
+  case ZOMBIE:
+  case DEAD:
+    BUG();
   }
 
   return old_prio;
@@ -231,51 +332,47 @@ int chprio(int pid, int newprio)
 int getprio(int pid)
 {
   if (pid < 1 || pid > NBPROC) return -1;
-  proc *p = &process_table[pid];
-  if (p->state == DEAD || p->state == ZOMBIE) return -1;
-  const int prio = p->priority;
-  return prio;
+  struct proc *proc = &process_table[pid];
+  if (proc->state == DEAD || proc->state == ZOMBIE) return -1;
+  return proc->priority;
 }
 
 int getpid(void)
 {
-  const int pid = current_process->pid;
-  return pid;
+  return current_process->pid;
 }
 
 void exit(int retval)
 {
   zombify(current_process, retval);
   schedule();
-  for (assert(false);;) { // assert is just a sanity check
-    // ensures gcc marks exit as `noreturn`
-  }
+  BUG(); // unreachable
 }
 
 int kill(int pid)
 {
-
   if (pid < 1 || pid > NBPROC) return -1;
-  proc *p = &process_table[pid];
+  struct proc *proc = &process_table[pid];
 
-  switch (p->state) {
-  case DEAD: // invalid pid
+  switch (proc->state) {
+  // can't kill what is already dead
+  case DEAD:
+  case ZOMBIE:
     return -1;
-  case ZOMBIE: // can't kill what's already dead
-    return -2; // to be compliant with test_4 (kill return value should be
-               // negative)
-  case ACTIVE: // current process just killed itself :'( lets just exit
+
+  // suicide
+  case ACTIVE:
     exit(0);
     break;
+
   case READY:
   case SLEEPING:
   case AWAITING_IO:
-    queue_del(p, node);
-    zombify(p, 0);
-    break;
   case BLOCKED:
+    queue_del(proc, node);
+    /* fall through */
   case AWAITING_CHILD:
-    zombify(p, 0);
+    zombify(proc, 0);
     break;
   }
 
@@ -284,21 +381,25 @@ int kill(int pid)
 
 void sleep(unsigned long ticks)
 {
-  // setup alarm, go to sleep and yield
   current_process->time.alarm = current_clock() + ticks;
+  if (current_process->time.alarm < current_clock()) { // => overflow
+    current_process->time.alarm = -1;                  // === max in unsigned
+    printf("  Warning [%s%%%i]: Saturated alarm\n",
+           current_process->name,
+           current_process->pid);
+  }
   current_process->state = SLEEPING;
   schedule();
 }
 
 int waitpid(int pid, int *retvalp)
 {
-
   if (pid < 0) { // reap *any* child process
     if (queue_empty(&current_process->children)) return -1;
 
     for (;;) {
-      proc *child;
-      queue_for_each(child, &current_process->children, proc, siblings)
+      struct proc *child;
+      queue_for_each(child, &current_process->children, struct proc, siblings)
       {
         if (child->state == ZOMBIE) {
           if (retvalp != NULL) *retvalp = child->retval;
@@ -313,14 +414,14 @@ int waitpid(int pid, int *retvalp)
 
   } else { // reap a specific child
     if (pid < 1 || pid > NBPROC) return -1;
-    proc *p = &process_table[pid];
-    if (p->state == DEAD || p->parent != current_process) return -1;
+    struct proc *proc = &process_table[pid];
+    if (proc->state == DEAD || proc->parent != current_process) return -1;
 
     for (;;) {
-      if (p->state == ZOMBIE) {
-	       if (retvalp != NULL) *retvalp = p->retval;
-	         destroy(p);
-	         return pid;
+      if (proc->state == ZOMBIE) {
+        if (retvalp != NULL) *retvalp = proc->retval;
+        destroy(proc);
+        return pid;
       }
 
       current_process->state = AWAITING_CHILD;
@@ -329,25 +430,50 @@ int waitpid(int pid, int *retvalp)
   }
 }
 
+void divide_error(void)
+{
+  printf("  Error [%s%%%i]: Divide by zero\n",
+         current_process->name,
+         current_process->pid);
+  kill(current_process->pid);
+}
+
+void protection_exception(void)
+{
+  printf("  Error [%s%%%i]: General protection fault\n",
+         current_process->name,
+         current_process->pid);
+  kill(current_process->pid);
+}
+
+void page_fault(void)
+{
+  printf("  Error [%s%%%i]: Page fault\n",
+         current_process->name,
+         current_process->pid);
+  kill(current_process->pid);
+}
+
 void schedule(void)
 {
   // process that's passing the cpu over
-  proc *pass = current_process;
+  struct proc *pass = current_process;
   assert(pass != NULL);
 
   // check whether there are sleeping procs to wake up
   const unsigned long now = current_clock();
-  proc *       p;
+  struct proc *       proc;
 CHECK_ALARM:
-  queue_for_each(p, &sleeping_procs, proc, node)
+  queue_for_each(proc, &sleeping_procs, struct proc, node)
   {
     // these are sorted by alarm, so we can stop whenever one wasn't reached
-    if (p->time.alarm > now) break;
+    if (proc->time.alarm > now) break;
 
     // otherwise we wake procs up by moving them to the ready queue
-    queue_del(p, node);
-    p->state = READY;
-    queue_add(p, &ready_procs, proc, node, priority);
+    assert(proc->state == SLEEPING);
+    queue_del(proc, node);
+    proc->state = READY;
+    queue_add(proc, &ready_procs, struct proc, node, priority);
     // an element was deleted => iterator is now invalid and we must refresh it
     goto CHECK_ALARM;
   }
@@ -356,220 +482,169 @@ CHECK_ALARM:
   // put it back in the priority queue if it's still active
   case ACTIVE:
     pass->state = READY;
-    queue_add(pass, &ready_procs, proc, node, priority);
+    queue_add(pass, &ready_procs, struct proc, node, priority);
     break;
 
-  // we'll only find a zombie proc here when it has just exited
+  // we'll only find a zombie proc here when it has just called exit()
   case ZOMBIE:
     // let the parent process know when one of its children just dies
     if (pass->parent->state == AWAITING_CHILD) {
       pass->parent->state = READY;
-      queue_add(pass->parent, &ready_procs, proc, node, priority);
+      queue_add(pass->parent, &ready_procs, struct proc, node, priority);
     }
-    break;
-
-  // we'll only find a blocked proc here when it has just been blocked
-  case BLOCKED:
-    printf("\n* %s(%d) just blocked *\n", pass->name, pass->pid);
     break;
 
   // when a process goes to sleep, we put it in a separate queue
   case SLEEPING:
-    queue_add(pass, &sleeping_procs, proc, node, time.alarm);
+    queue_add(pass, &sleeping_procs, struct proc, node, time.alarm);
     break;
 
   // nothing to do
   case AWAITING_CHILD:
   case AWAITING_IO:
+  case BLOCKED:
     break;
 
   // unreachable
   case READY:
   case DEAD:
-    assert(false);
+    BUG();
   }
 
   // process that will take control of the execution
-  assert(!queue_empty(&ready_procs));
-  proc *take = queue_out(&ready_procs, proc, node);
+  struct proc *take = queue_out(&ready_procs, struct proc, node);
+  assert(take != NULL);
   current_process = take;
   take->state = ACTIVE;
   take->time.quantum = QUANTUM;
 
   // hand the cpu over to the newly scheduled process
-  ctx_sw(&pass->ctx, &take->ctx);
+  // XXX: schedule() always causes a TLB flush. other code may rely on this
+  switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
-proc* get_current_process(){
+struct proc *get_current_process(void)
+{
   return current_process;
 }
 
-static void filiate(proc *c, proc *p)
+void set_ready(struct proc *proc)
 {
-  c->parent = p;
-  queue_add(c, &p->children, proc, siblings, state);
+  proc->state = READY;
+  queue_add(proc, &ready_procs, struct proc, node, priority);
 }
 
-static void zombify(proc *p, int retval)
-{
-  if(p->state == BLOCKED){
-    queue_del(p, blocked); // remove process from blocked list
-    list_sem[p->sid].count += 1; // increments counter of semaphore
-  }
+/*******************************************************************************
+ * Internal function
+ ******************************************************************************/
 
-  p->retval = retval; // store exit code to be read later
-  p->state = ZOMBIE;
+static inline void filiate(struct proc *c, struct proc *p)
+{
+  c->parent = p;
+  queue_add(c, &p->children, struct proc, siblings, state);
+}
+
+static void zombify(struct proc *proc, int retval)
+{
+  proc->retval = retval;
+  proc->state = ZOMBIE;
 
   // when a process dies, its children must be adopted by init
-  while (!queue_empty(&p->children)) {
-    proc *child = queue_out(&p->children, proc, siblings);
+  while (!queue_empty(&proc->children)) {
+    struct proc *child = queue_out(&proc->children, struct proc, siblings);
     filiate(child, INIT_PROC);
     // when there are zombie children, wake init up to avoid a resource leak
     if (child->state == ZOMBIE && INIT_PROC->state == AWAITING_CHILD) {
       INIT_PROC->state = READY;
-      queue_add(INIT_PROC, &ready_procs, proc, node, priority);
+      queue_add(INIT_PROC, &ready_procs, struct proc, node, priority);
     }
   }
 
   // let waiting parent know its child is now a ready-to-be-reaped zombie
-  assert(p->parent != NULL);
-  if (p->parent->state == AWAITING_CHILD) {
-    p->parent->state = READY;
-    queue_add(p->parent, &ready_procs, proc, node, priority);
+  if (proc->parent != NULL && proc->parent->state == AWAITING_CHILD) {
+    proc->parent->state = READY;
+    queue_add(proc->parent, &ready_procs, struct proc, node, priority);
   }
 }
 
-static void destroy(proc *p)
+static void destroy(struct proc *proc)
 {
-  assert(p->state == ZOMBIE);
+  assert(proc->state == ZOMBIE);
 
   // remove proc from its parent children list
-  if (p->parent != NULL) queue_del(p, siblings);
+  queue_del(proc, siblings);
 
   // free resources
-  mem_free(p->kernel_stack, STACK_SIZE * sizeof(int));
-  mem_free(p->name, (strlen(p->name) + 1) * sizeof(char));
+  sem_process_destroy(proc);
+  mq_process_destroy(proc);
+  shm_process_destroy(proc);
+  while (proc->pages != NULL) {
+    struct page *page = proc->pages;
+    proc->pages = page->next;
+    page_free(page);
+  }
+  mem_free(proc->kernel_stack, KERNEL_STACK_SIZE * sizeof(int));
 
   // add it to the free list
-  p->state = DEAD;
-  queue_add(p, &free_procs, proc, node, pid);
+  proc->state = DEAD;
+  queue_add(proc, &free_procs, struct proc, node, state);
 }
 
 static void idle(void)
 {
   // idle must start init
-  int pid;
-  (void)pid;
-  pid = start(init, 256, MAXPRIO, "init", NULL);
-  assert(pid == 1);
+  const int pid = start("init", 4000, MAXPRIO, NULL);
+  assert(pid > 0);
+  INIT_PROC = &process_table[pid];
 
   // and then stay idle forever
   sti();
   for (;;) hlt();
 }
 
-static int wall_clock_daemon(void *arg);
-static int p1(void *arg);
-static int p2(void *arg);
-static int p3(void *arg);
-static int p4(void *arg);
-
-static int init(void *arg)
+static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
+                            const void *contents, unsigned flags)
 {
-  (void)arg;
+  assert(base % PAGE_SIZE == 0); // assert alignment
 
-  start(run_test_processes, 512, 100, "run_process_test", NULL);
-  start(wall_clock_daemon, 512, 5, "clock", NULL);
+  // map region in chunks of maximum size equal to that of a page
+  while (size != 0) {
+    const size_t chunk = size >= PAGE_SIZE ? PAGE_SIZE : size;
 
-  // reaper daemon makes sure zombie children are properly killed
-  for (;;) waitpid(-1, NULL);
+    // try to allocate a page for the actual data
+    struct page *page = page_alloc();
+    if (page == NULL) return 0;
+    page->next = proc->pages;
+    proc->pages = page;
 
-  return 0;
-}
+    // compute page-aligned addresses, both virtual and physical
+    const uint32_t virt = base;
+    const uint32_t real = page->frame * PAGE_SIZE;
 
-static int wall_clock_daemon(void *arg)
-{
-  (void)arg;
-  char time[] = "HH:MM:SS";
-  for (;;) {
-    unsigned seconds = current_clock() / CLOCKFREQ;
-    unsigned minutes = seconds / 60;
-    seconds %= 60;
-    unsigned hours = minutes / 60;
-    minutes %= 60;
-    hours %= 24;
-    sprintf(time, "%02u:%02u:%02u", hours, minutes, seconds);
-    console_write_raw(time, 8, 24, 72);
-    wait_clock(MS_TO_TICKS(1000));
+    // copy contents if needed
+    if (contents != NULL) {
+      memcpy((void *)real, contents, chunk);
+      contents = (char *)contents + chunk;
+    }
+
+    // we might need to allocate a page table as well
+    int miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+    if (miss) {
+      // fortunately, it fits exactly in a page
+      struct page *page_tab = page_alloc();
+      if (page_tab == NULL) return 0;
+      page_tab->next = proc->pages;
+      proc->pages = page_tab;
+      // add page directory entry, then try the mapping again (should work now)
+      ptab_map((uint32_t *)proc->ctx.page_dir, virt, page_tab->frame, flags);
+      miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
+      assert(!miss);
+    }
+    // NOTE: this is only used before proc runs, so no need to flush TLB
+
+    base += PAGE_SIZE;
+    size -= chunk;
   }
-  return 0;
-}
 
-static int p1(void *arg)
-{
-  const char c = *(char *)arg;
-  for (;;) {
-    printf("%c", c);
-    wait_clock(MS_TO_TICKS(1 * 1000));
-  }
-  return 1;
-}
-
-static int p2(void *arg)
-{
-  const char c = *(char *)arg;
-  for (;;) {
-    printf("%c", c);
-    wait_clock(MS_TO_TICKS(2 * 1000));
-  }
-  return 2;
-}
-
-static int p3(void *arg)
-{
-  const char c = *(char *)arg;
-  for (;;) {
-    printf("%c", c);
-    wait_clock(MS_TO_TICKS(5 * 1000));
-  }
-  return 3;
-}
-
-static int p4(void *arg)
-{
-  const char c = *(char *)arg;
-  for (;;) {
-    printf("%c", c);
-    wait_clock(MS_TO_TICKS(10 * 1000));
-  }
-  return 4;
-}
-
-static int run_simple_processes()
-{
-  printf("Hello world\n");
-  int pids[] = {
-      start(p1, 1024, 2, "P1", "."),
-      start(p2, 1024, 2, "P2", "-"),
-      start(p3, 1024, 2, "P3", "+"),
-      start(p4, 1024, 2, "P4", "*"),
-  };
-  wait_clock(MS_TO_TICKS(31 * 1000));
-  for (int i = 0; i < 4; ++i) kill(pids[i]);
-  printf("\nThe answer still is %d\n", 42);
-
-  return 0;
-}
-
-static int run_test_processes(void *arg)
-{
-  (void)arg;
-#ifdef KERNEL_TEST
-  printf("---KERNEL TESTS---\n");
-  kernel_run_process_tests();
-  printf("---END OF KERNEL TESTS---\n");
-#endif
-  run_simple_processes();
-
-  return 0;
+  return base - 1;
 }

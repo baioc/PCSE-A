@@ -1,7 +1,7 @@
-.PHONY: all clean build test run debug gdb
+.PHONY: all clean build run debug gdb
 
 # default rule
-all: test
+all: build
 
 # Output directory for each submakefiles
 OUTPUT := out
@@ -33,24 +33,15 @@ clean:
 	$(MAKE) clean -C kernel/
 	$(MAKE) clean -C user/
 
-#
-# Build modes are EITHER 'build' or 'test'.
-# A 'clean' is needed when changing between them.
-#
 build: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
 	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
 	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE)
 
-test: | kernel/$(PLATFORM_TOOLS) user/$(PLATFORM_TOOLS)
-	$(MAKE) -C user/ all VERBOSE=$(VERBOSE)
-	$(MAKE) -C kernel/ kernel.bin VERBOSE=$(VERBOSE) KERNEL_TEST=1
+#
+# "make run" launches Qemu WITHOUT gdb
+# "make debug & make gdb" runs Qemu with a connected gdb session
+#
 
-#
-# 'run' and 'debug' rules require the kernel to be already built, for example:
-# - "make build run" builds the non-test kernel and runs qemu WITHOUT gdb
-# - since we'll follow up with a test build: "make clean test"
-# - "make debug & make gdb" runs the built kernel WITH gdb
-#
 run:
 	$(QEMU) -kernel kernel/kernel.bin
 
@@ -62,5 +53,4 @@ gdb:
 	$(GDB) --tui -f kernel/kernel.bin \
 	       -ex "dir kernel" \
 	       -ex "target remote localhost:1234" \
-	       -ex "break panic" \
 	       -ex "tbreak kernel_start" -ex "continue"

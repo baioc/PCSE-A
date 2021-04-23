@@ -72,29 +72,27 @@ enable_paging:
 	/* CR3 = Base Address of the Page Directory */
 	/* Cf. 3.6.3 Intel Architecture Software Developer's Manual Volume 3 */
 	movl	%eax,%cr3
+
 	/* Task State Segment, CR3 field must be initialized to Base Address of the Page Directory */
 	/* Cf. 3.6.3 Intel Architecture Software Developer's Manual Volume 3 */
 	movl	%eax,tss+28
+
 	/* PG (paging) flag, bit 31 of CR0 : must to be set to active paging */
 	/* Cf. 6.2.1 Intel Architecture Software Developer's Manual Volume 3 */
-        /* Also sets WP, bit 16 of CR0 so kernel writes into read only pages produce page faults */
-	movl	%cr0,%eax  
-	orl	$0x80010000,%eax
+	movl	%cr0,%eax
+	orl	$0x80010001,%eax
 	movl	%eax,%cr0
 
+	/* NOTE: this seems like a sanity check to test paging ... or force initial TLB usage (?) */
 	jmp	0f
 0:	movl	$0f,%eax
 	jmp	*%eax
 0:	ret
 
-/* Unimplemented functions.
+/* TODO: Unimplemented functions.
 You have to implement them it in ".c" files. As these symbols are marked as
 "weak", they will no more be used as soon as you write your implementations.
 */
-	.weak console_putbytes
-console_putbytes:
-	ret
-
 	.weak keyboard_data
 keyboard_data:
 	ret
@@ -105,7 +103,7 @@ state. */
 kbd_leds:
 	ret
 
-    .org    0x1000
+    .org    0x01000
     /* This address will be mapped at kernel_base(0x10000) + 0x1000=0x101000 */
     /* page directory */
     /* Cf. 3.6.2 Intel Architecture Software Developer's Manual Volume 3 */
@@ -115,7 +113,7 @@ pgdir:
     .fill   1024,4,0
 
     /* Page table: will contain all mappings for the kernel space */
-    .org    0x2000
+    .org    0x02000
     .global pgtab
 pgtab:
     .org    0x42000

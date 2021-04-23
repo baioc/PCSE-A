@@ -128,6 +128,8 @@ void early_mm_check(void)
 
 /* Page directory */
 extern unsigned pgdir[];
+
+// Supervisor page, RW, Present
 #define PAGE_DIR_FLAGS     0x00000003u
 
 
@@ -221,4 +223,3 @@ void early_mm_map_kernel(void)
         /* Zone 6: free memory is read/write */
         early_mm_map_region(pgdir, (unsigned)_end, (unsigned)mem_end, PAGE_TABLE_RW);
 }
-

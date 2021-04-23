@@ -44,11 +44,10 @@
  * Public function
  ******************************************************************************/
 
-void set_interrupt_handler(int num, void (*handler)(void))
+void set_interrupt_handler(int num, void (*handler)(void), unsigned char pl)
 {
-  assert(num >= 32); // 0-31 are used by trap gates in processor_structs.c
+  assert(num != 1 && num != 15 && (num < 20 || num > 31)); // intel-reserved
   assert((unsigned)num < (sizeof(idt) / sizeof(idt[0])));
-  assert(handler != NULL);
   const uint32_t addr = (uint32_t)handler;
 
   // see https://wiki.osdev.org/Interrupt_Descriptor_Table
@@ -62,7 +61,7 @@ void set_interrupt_handler(int num, void (*handler)(void))
       .upper_addr = (addr & 0xFFFF0000) >> 16,
       .lower_addr = addr & 0x0000FFFF,
       .selector = KERNEL_CS,
-      .attributes = 0b10001110, // no privilege, trap storage, 16b trap gate
+      .attributes = 0x80 | ((pl & 0b11) << 5) | 0x0E,
   };
 
   idt[num] = *((uint64_t *)&entry);
