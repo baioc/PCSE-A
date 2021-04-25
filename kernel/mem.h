@@ -7,6 +7,7 @@
 
 #include "stdint.h"
 #include "stdbool.h"
+#include "types.h"
 
 /*******************************************************************************
  * Macros
@@ -96,5 +97,19 @@ void *translate(const uint32_t *pgdir, uint32_t virt);
  * still lead to page faults, for instance.
  */
 bool access_ok(uint32_t addr, unsigned long size);
+
+/**
+ * Process-local syscall version of sbrk that operates on the current process.
+ * Not to be confused with the kernelspace sbrk().
+ *
+ * Increment the program's data space by <increment> bytes.
+ * Calling sbrk() with an increment of 0 can be used to find the current
+ * location of the program break.
+ *
+ * Returns the previous program break on success.
+ * If the break was increased then this value is a pointer to the start of the
+ * newly allocated memory. (void *)-1 on error (ie: no memory available)
+ */
+void *_sbrk(ptrdiff_t increment);
 
 #endif

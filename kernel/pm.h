@@ -74,6 +74,8 @@ struct proc {
   struct page *    pages;
   uint32_t         shm_begin; // virtual address base for shared pages
   struct shm_page *shm_slots[MAX_SHM_PAGES];
+  uint32_t         brk; // end of virtual data segment
+  uint32_t         brk_limit;
 
   // message queue-related fields
   int  m_queue_fid; // queue in which the process is blocked, if any
@@ -100,5 +102,24 @@ struct proc *get_current_process(void);
 
 /// Puts a hijacked process back into the scheduler's ready queue. @[process.c]
 void set_ready(struct proc *proc);
+
+/**
+ * Maps, on a process PROC's page directory, enough virtual memory for at least
+ * SIZE bytes starting at the virtual address BASE. When CONTENTS is not null,
+ * this will also copy SIZE bytes from that address into the mapped region.
+ * BASE must be a page-aligned address.
+ *
+ * Note that this procedure will acquire physical pages for the allocated
+ * region, as well as for any needed page tables, while applying user flags to
+ * these page dir/table entries.
+ *
+ * On success, returns the highest mapped virtual address (so that+1 gives the
+ * next page-aligned unmapped virtual address that could be used for subsequent
+ * regions), otherwise returns 0.
+ *
+ * NOTE: ensure TLB is flushed after a successful call on the current process.
+ */
+uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
+                     const void *contents, unsigned flags);
 
 #endif /* _PM_H_ */

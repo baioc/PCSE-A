@@ -7,6 +7,7 @@
 #include "stddef.h"
 #include "debug.h"
 #include "string.h"
+#include "pm.h"
 
 /*******************************************************************************
  * Macros
@@ -142,4 +143,30 @@ bool access_ok(uint32_t addr, unsigned long size)
 {
   return addr >= MMAP_USER_START && addr < MMAP_STACK_END &&
          size < MMAP_STACK_END - addr;
+}
+
+void *_sbrk(ptrdiff_t increment)
+{
+  struct proc *  proc = get_current_process();
+  const uint32_t s = proc->brk;
+
+  // check for overflow or oom
+  const uint32_t c = s + increment;
+  if ((c < proc->brk) || (c > proc->brk_limit)) return (void *)-1;
+
+  // forward-align to check whether we need more pages
+  assert(s >= PAGE_SIZE);
+  uint32_t prev = s % PAGE_SIZE == 0 ? s : s - (s % PAGE_SIZE) + PAGE_SIZE;
+  uint32_t next = c % PAGE_SIZE == 0 ? c : c - (c % PAGE_SIZE) + PAGE_SIZE;
+  if (next > prev) {
+    const uint32_t curr =
+        mmap_region(proc, prev, next - prev, NULL, PAGE_FLAGS_USER_RW);
+    if (curr == 0) return (void *)-1;
+    assert(curr + 1 == next);
+  }
+
+  proc->brk = c;
+  if (next > prev) schedule(); // ensures TLB flush
+
+  return (void *)s;
 }
