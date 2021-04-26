@@ -15,7 +15,8 @@ int main(void)
   }
 
   printf(":: reached target user system\n");
-  // TODO: interactive entry point
+  printf(":: starting system shell\n");
+  pid = start("shell", 2048, 1, NULL);
 
   for (;;) waitpid(-1, NULL);
 }
