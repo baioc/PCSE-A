@@ -100,6 +100,7 @@ DEFN_SYSCALL2(chprio)
 DEFN_SYSCALL1(kill)
 DEFN_SYSCALL2(waitpid)
 DEFN_SYSCALL1(exit)
+DEFN_SYSCALL0(ps)
 
 /* mqueue.h */
 DEFN_SYSCALL2(pcount)
