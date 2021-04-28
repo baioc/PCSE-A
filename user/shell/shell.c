@@ -1,5 +1,6 @@
 #include "stdio.h"
 #include "process.h"
+#include "sem.h"
 
 static void help();
 
@@ -14,11 +15,19 @@ int main()
 
   printf("**ps command**\n");
   ps();
+
+  int sid = screate(1);
+
+  printf("**sinfo command**\n");
+  sinfo();
+
+  sdelete(sid);
 }
 
 static void help()
 {
   printf("Commands:\n");
-  printf("- help:\tshow this help\n");
-  printf("- ps:\tthe list of all created processes\n");
+  printf("- help:\t\tshow this help\n");
+  printf("- ps:\t\tthe list of all created processes\n");
+  printf("- sinfo:\tthe list of all created semaphores\n");
 }

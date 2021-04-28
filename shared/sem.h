@@ -49,4 +49,13 @@ int wait(int sem);
  */
 int scount(int sem);
 
+
+/*
+* Display the following information about all existing semaphores:
+*    - their id
+*    - waiting processes (pid and name)
+*    - counter value
+*/
+void sinfo();
+
 #endif /* _SEM_H_ */

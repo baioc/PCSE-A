@@ -119,6 +119,7 @@ DEFN_SYSCALL2(signaln)
 DEFN_SYSCALL2(sreset)
 DEFN_SYSCALL1(try_wait)
 DEFN_SYSCALL1(wait)
+DEFN_SYSCALL0(sinfo)
 
 /* smh.h */
 DEFN_SYSCALL1(shm_create)
