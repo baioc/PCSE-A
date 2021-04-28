@@ -38,6 +38,17 @@ static int sys_cons_write(const char *str, long size)
   return cons_write(str, size);
 }
 
+static unsigned long sys_cons_read(char *string, unsigned long lenght)
+{
+  if (!access_ok((uint32_t)string, lenght)) return 0;
+  return cons_read(string, lenght);
+}
+
+static void sys_cons_echo(int on)
+{
+  return cons_echo(on);
+}
+
 static void sys_clock_settings(unsigned long *quartz, unsigned long *ticks)
 {
   if (!access_ok((uint32_t)quartz, sizeof(unsigned long)) ||
@@ -207,6 +218,8 @@ typedef int (*syscall_fn_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 static const void *syscalls[] = {
     SYSCALL_ENTRY(cons_write),
+    SYSCALL_ENTRY(cons_read),
+    SYSCALL_ENTRY(cons_echo),
     SYSCALL_ENTRY(clock_settings),
     SYSCALL_ENTRY(current_clock),
     SYSCALL_ENTRY(wait_clock),

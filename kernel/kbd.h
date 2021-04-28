@@ -22,6 +22,8 @@
 #ifndef __KBD_H__
 #define __KBD_H__
 
+#define console_putbytes cons_write /* backward compatibility hack */
+
 /// Enables keyboard interrupts and sets up a redirect to do_scancode().
 void kbd_init(void);
 

@@ -14,7 +14,9 @@
 #include "interrupts.h"
 #include "cpu.h"
 #include "stdint.h"
+#include "console.h"
 #include "debug.h"
+#include "mqueue.h"
 #include "stdio.h"
 
 extern void kbd_interrupt_handler(void);
@@ -38,52 +40,53 @@ extern void kbd_interrupt_handler(void);
  * Variables
  ******************************************************************************/
 
+ int fid;
+ bool echo = true;
+
 /*******************************************************************************
  * Public function
  ******************************************************************************/
 
+// récupère des caractères, est réveillé par keyboard_data, est appelé par utilisateur
+unsigned long cons_read(char *string, unsigned long length){
+  if(length <= 0){
+    return 0;
+  }
+  char a = string[1];
+  return (int) a;
+}
+
+void cons_echo(int on){
+  if(on == 0 || on == 1){
+    echo = (bool) on;
+  }
+}
+
 void kbd_init(void)
 {
-  // PS/2 driver initialization sequence
-  // see https://wiki.osdev.org/"8042"_PS/2_Controller
-  outb(0xAD, PS2_CMND_PORT); // disable devices
-  outb(0xA7, PS2_CMND_PORT);
-  inb(PS2_DATA_PORT); // flush buffer
-  outb(0x20, PS2_CMND_PORT);
-  uint8_t ccb = inb(PS2_DATA_PORT); // check controller configuration byte
-  printf("initial PS/2 controller configuration: %#x\n", ccb);
-  if (!(ccb & 0b00010000)) BUG();
-  ccb &= 0b10111100;
-  outb(0x60, PS2_CMND_PORT);
-  outb(ccb, PS2_DATA_PORT);
-  outb(0xAA, PS2_CMND_PORT); // perform self test
-  uint8_t data = inb(PS2_DATA_PORT);
-  if (data != 0x55) BUG();
-  printf("controller test ok\n");
-  outb(0x60, PS2_CMND_PORT); // restore ccb
-  outb(ccb, PS2_DATA_PORT);
-  outb(0xAB, PS2_CMND_PORT); // test first port
-  data = inb(PS2_DATA_PORT);
-  if (data != 0x00) BUG();
-  printf("port test ok\n");
-  outb(0xAE, PS2_CMND_PORT); // enable first device (keyboard)
-  ccb |= 0b00000001;
-  outb(0x60, PS2_CMND_PORT); // and enable its IRQ
-  outb(ccb, PS2_DATA_PORT);
-
-  outb(0x20, PS2_CMND_PORT);
-  printf("final PS/2 controller configuration: %#x\n", inb(PS2_DATA_PORT));
+  // creates the message-queue used to pass the caracters from the keyboard
+  fid = pcreate(1);
 
   // setup intr handler and unmask IRQ
   set_interrupt_handler(INTR_VECTOR_OFFSET + 1, kbd_interrupt_handler, PL_USER);
   mask_irq(1, false);
 }
 
-// str is null-terminated
+// gère cons_read et cons_echo, lance aussi printf si cons_echo est actif
 void keyboard_data(char *str)
 {
-  (void)str;
-  // TODO
+  if(echo){
+    int cpt = 0;
+    char c = str[cpt];
+    while(c != '\0'){
+      printf("%c", c);
+      cpt ++;
+      c = str[cpt];
+    }
+  }
+  /*} if(un processus en attente){
+    rempli la file
+  }*/
 }
 
 void kbd_leds(unsigned char leds)
