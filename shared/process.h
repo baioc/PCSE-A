@@ -49,4 +49,13 @@ int getpid(void);
  */
 int waitpid(int pid, int *retvalp);
 
+/*
+ * Display the current running processes with the following information :
+ *    - their pid
+ *    - their name
+ *    - their state
+ *    - their parent's pid
+ */
+void ps();
+
 #endif /* _PROCESS_H_ */

@@ -108,6 +108,8 @@ static void destroy(struct proc *proc);
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
                             const void *contents, unsigned flags);
 
+static const char *get_string_state(int state);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -647,4 +649,50 @@ static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
   }
 
   return base - 1;
+}
+
+/*
+ * Display the current running processes with the following information:
+ *    - their pid
+ *    - their name
+ *    - their state
+ *    - their parent's pid
+ */
+void ps()
+{
+  printf("PID\tName\tState\t\tParent PID\n");
+
+  // For now we simply iterate on process_table
+  for (int i = 0; i < NBPROC; i++) {
+    if (process_table[i].state == DEAD) continue;
+    printf("%d\t%s\t%-15s\t%d\n",
+           process_table[i].pid,
+           process_table[i].name,
+           get_string_state(process_table[i].state),
+           process_table[i].parent == NULL ? -1 : process_table[i].parent->pid);
+  }
+}
+
+static const char *get_string_state(int state)
+{
+  switch (state) {
+  case DEAD:
+    return "DEAD";
+  case ZOMBIE:
+    return "ZOMBIE";
+  case SLEEPING:
+    return "SLEEPING";
+  case BLOCKED:
+    return "BLOCKED";
+  case AWAITING_CHILD:
+    return "AWAITING_CHILD";
+  case AWAITING_IO:
+    return "AWAITING_IO";
+  case READY:
+    return "READY";
+  case ACTIVE:
+    return "ACTIVE";
+  default:
+    return "UNKNOWN";
+  }
 }
