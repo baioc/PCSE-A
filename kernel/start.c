@@ -31,9 +31,6 @@ void kernel_start(void)
   console_init();
   printf(":: reached kernel start \n");
 
-  printf(":: initializing PS/2 driver\n");
-  kbd_init();
-
   printf(":: configuring system timer\n");
   clock_init();
 
@@ -54,6 +51,9 @@ void kernel_start(void)
 
   printf(":: initializing semaphores\n");
   sem_init();
+
+  printf(":: initializing PS/2 driver\n");
+  kbd_init();
 
   printf(":: starting process scheduler\n");
   process_init();

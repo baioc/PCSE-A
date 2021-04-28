@@ -16,7 +16,6 @@
 #include "stdint.h"
 #include "console.h"
 #include "debug.h"
-#include "mqueue.h"
 #include "stdio.h"
 
 extern void kbd_interrupt_handler(void);
@@ -40,7 +39,6 @@ extern void kbd_interrupt_handler(void);
  * Variables
  ******************************************************************************/
 
- int fid;
  bool echo = true;
 
 /*******************************************************************************
@@ -65,7 +63,6 @@ void cons_echo(int on){
 void kbd_init(void)
 {
   // creates the message-queue used to pass the caracters from the keyboard
-  fid = pcreate(1);
 
   // setup intr handler and unmask IRQ
   set_interrupt_handler(INTR_VECTOR_OFFSET + 1, kbd_interrupt_handler, PL_USER);
