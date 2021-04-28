@@ -35,6 +35,5 @@
 #define NR_shm_create     27
 #define NR_shm_acquire    28
 #define NR_shm_release    29
-#define NR_debug_me       30 /* TODO: remove this after debugs */
 
 #endif // _SYSCALL_H_

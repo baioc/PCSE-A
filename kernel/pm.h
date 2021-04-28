@@ -19,9 +19,13 @@
  * Macros
  ******************************************************************************/
 
+#define MAX_SHM_PAGES 128 /* per process */
+
 /*******************************************************************************
  * Types
  ******************************************************************************/
+
+struct shm_page; // forward decls
 
 struct proc {
   // current state
@@ -40,7 +44,7 @@ struct proc {
   int   pid;
   char *name;
 
-  // Execution context used in switch_context()
+  // XXX: do not reorder ctx fields, used in switch_context()
   struct {
     uint32_t ebx;
     uint32_t esp;
@@ -50,6 +54,7 @@ struct proc {
     uint32_t page_dir; // aka CR3
     uint32_t esp0;
   } ctx;
+  uint32_t *kernel_stack;
 
   // scheduling information
   int priority;
@@ -59,33 +64,28 @@ struct proc {
   } time;
   link node; // doubly-linked node used by queues
 
-  // filiation links
+  // filiation links and temporary return storage
+  int          retval;
   struct proc *parent;
   link         children;
   link         siblings;
 
-  // return value storage
-  int retval;
+  // paging structures, private and shared
+  struct page *    pages;
+  uint32_t         shm_begin; // virtual address base for shared pages
+  struct shm_page *shm_slots[MAX_SHM_PAGES];
 
-  // dynamically allocated memory
-  uint32_t *   kernel_stack;
-  struct page *pages;
-
-  // user shared memory
-  struct page *shm_used;
-  struct page *shm_free;
-  uint32_t     shm_begin;
-  struct page *shm_pages;
+  // message queue-related fields
+  int  m_queue_fid; // queue in which the process is blocked, if any
+  int  message;     // message being sent/received
+  bool m_queue_rd;  // whether the queue was deleted/reset
+  link owned_queues;
 
   // semaphore-related fields
   int  sid;         // id of the semaphore blocking it (if BLOCKED)
   bool sjustreset;  // whether sem was reset
   bool sjustdelete; // whether sem was deleted
-
-  // message queue-related fields
-  void *message;     // message being sent/received
-  int   m_queue_fid; // queue in which the process is blocked, if any
-  bool  m_queue_rd;  // whether the queue was deleted/reset
+  link owned_semaphores;
 };
 
 /*******************************************************************************

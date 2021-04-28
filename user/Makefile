@@ -72,7 +72,7 @@ include build/stdlib.mk
 
 ### Compile userspace tests ###
 TESTS_DIR     := tests
-TESTS_OPTIONS := CONS_READ_LINE WITH_MSG
+TESTS_OPTIONS := WITH_MSG WITH_SEM CONS_READ_LINE
 include build/tests.mk
 
 ### Import userspace program build toolchain ###
