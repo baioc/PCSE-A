@@ -33,7 +33,7 @@ extern void shm_init(void);
 void kernel_start(void)
 {
   console_init();
-  printf(":: reached kernel start \n");
+  printf(":: continuing kernel start \n");
 
   printf(":: configuring system timer\n");
   clock_init();
