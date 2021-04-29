@@ -25,6 +25,9 @@ extern void kbd_interrupt_handler(void);
  * Macros
  ******************************************************************************/
 
+#define PS2_CMND_PORT 0x64
+#define PS2_DATA_PORT 0x60
+
 #define STDIN_BUFFER_SIZE 21
 
 /*******************************************************************************
@@ -60,10 +63,10 @@ void kbd_init(void)
   mask_irq(1, false);
 }
 
-// https://wiki.osdev.org/PS/2_Keyboard
+// https://wiki.osdev.org/PS2_Keyboard
 void kbd_interrupt(void)
 {
-  const unsigned code = inb(0x60);
+  const unsigned code = inb(PS2_DATA_PORT);
   acknowledge_interrupt(1);
   do_scancode(code); // calls keyboard_data() and kbd_leds()
 }
@@ -85,8 +88,8 @@ void keyboard_data(char *str)
 
 void kbd_leds(unsigned char leds)
 {
-  (void)leds;
-  // TODO
+  outb(0xED, PS2_CMND_PORT);
+  outb(leds, PS2_DATA_PORT);
 }
 
 unsigned long cons_read(char *string, unsigned long length)

@@ -62,5 +62,6 @@ void kernel_start(void)
   printf(":: configuring syscall handlers\n");
   syscall_init();
 
+  printf(":: switching to userspace\n");
   idle();
 }
