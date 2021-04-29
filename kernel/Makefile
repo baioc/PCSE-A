@@ -64,9 +64,7 @@ CFLAGS := -m32 -march=pentium \
 		  -fno-pie
 
 ifeq ($(OS_PCSEA),)
-
-CFLAGS := $(CFLAGS) -no-pie \
-
+CFLAGS := $(CFLAGS) -no-pie
 endif
 
 CFLAGS := $(CFLAGS) $(DEFS)

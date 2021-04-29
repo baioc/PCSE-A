@@ -216,8 +216,8 @@ typedef int (*syscall_fn_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 static const void *syscalls[] = {
     SYSCALL_ENTRY(cons_write),
-    SYSCALL_ENTRY(cons_read),
     SYSCALL_ENTRY(cons_echo),
+    SYSCALL_ENTRY(cons_read),
     SYSCALL_ENTRY(clock_settings),
     SYSCALL_ENTRY(current_clock),
     SYSCALL_ENTRY(wait_clock),

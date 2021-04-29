@@ -10,8 +10,6 @@
 #define WEAK_STUB(symbol)       .weak symbol; symbol:
 
 /* TODO: implement missing system subroutines */
-WEAK_STUB(cons_read)
-WEAK_STUB(cons_echo)
 WEAK_STUB(sys_info)
 
 .weak __do_a_fault
