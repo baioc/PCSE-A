@@ -5,12 +5,17 @@
 
 int main(void)
 {
-  int shell_pid;
-
+  int pid, shell_pid;;
   printf(":: reached init\n");
-  printf(":: reached target user system\n");
 
+  printf(":: testing dynamic user heap\n");
+  pid = start("sbrktest", 0x1B0B, 1, NULL);
+  assert(pid > 0);
+  waitpid(pid, NULL);
+
+  printf(":: reached target user system\n");
   printf(":: starting system shell\n");
+  
   shell_pid = start("shell", 2048, 1, 0);
 
   // Once the command interpreter has exited it's time to shutdown

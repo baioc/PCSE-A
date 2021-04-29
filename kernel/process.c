@@ -91,23 +91,6 @@ static void zombify(struct proc *proc, int retval);
  */
 static void destroy(struct proc *proc);
 
-/**
- * Maps, on a process PROC's page directory, enough virtual memory for at least
- * SIZE bytes starting at the virtual address BASE. When CONTENTS is not null,
- * this will also copy SIZE bytes from that address into the mapped region.
- * BASE must be a page-aligned address.
- *
- * Note that this procedure will acquire physical pages for the allocated
- * region, as well as for any needed page tables, while applying user flags to
- * these page dir/table entries.
- *
- * On success, returns the highest mapped virtual address (so that+1 gives the
- * next page-aligned unmapped virtual address that could be used for subsequent
- * regions), otherwise returns 0 (and the page directory is now invalid).
- */
-static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            const void *contents, unsigned flags);
-
 static const char *get_string_state(int state);
 
 /*******************************************************************************
@@ -208,24 +191,25 @@ int start(const char *name, unsigned long ssize, int prio, void *arg)
   memcpy((uint32_t *)new_proc->ctx.page_dir, pgdir, 64 * sizeof(pgdir[0]));
 
   // map and copy application code into process virtual memory
-  const uint32_t app_last = mmap_region(new_proc,
-                                        MMAP_USER_START,
-                                        (char *)app->end - (char *)app->start,
-                                        app->start,
-                                        PAGE_FLAGS_USER_RW);
-  if (app_last == 0) goto FAIL_FREE_PAGES;
+  new_proc->brk = mmap_region(new_proc,
+                              MMAP_USER_START,
+                              (char *)app->end - (char *)app->start,
+                              app->start,
+                              PAGE_FLAGS_USER_RW);
+  if (new_proc->brk == 0) goto FAIL_FREE_PAGES;
 
   // set up shared memory after user data
-  const uint32_t shm_end = shm_process_init(new_proc, app_last + 1);
-  if (shm_end == 0) goto FAIL_FREE_PAGES;
+  new_proc->brk = shm_process_init(new_proc, new_proc->brk + 1);
+  if (new_proc->brk == 0) goto FAIL_FREE_PAGES;
+
+  // the heap goes next
+  new_proc->brk += 1;
 
   // allocate and map user stack
   uint32_t stack_first = MMAP_STACK_END - ssize;
   stack_first -= stack_first % PAGE_SIZE; // round down to page-aligned address
-  // we don't use the entire memory space, so heap and stack can't really
-  // bump into each other, but we'll add the check anyway while making sure
-  // there's at least one unmapped page between them (to catch stack overflows)
-  if (stack_first - PAGE_SIZE <= shm_end) goto FAIL_FREE_PAGES;
+  if (stack_first < new_proc->brk) goto FAIL_FREE_PAGES;
+  new_proc->brk_limit = stack_first;
   const uint32_t stack_last = mmap_region(new_proc,
                                           stack_first,
                                           MMAP_STACK_END - stack_first,
@@ -536,6 +520,70 @@ void set_ready(struct proc *proc)
   queue_add(proc, &ready_procs, struct proc, node, priority);
 }
 
+uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
+                     const void *contents, unsigned flags)
+{
+  assert(base % PAGE_SIZE == 0); // assert alignment
+
+  // use these to avoid dirtying the process' paging structures on failure
+  // XXX: pgdir in static storage to avoid using the limited kernel stack size
+  struct page *   pages = proc->pages;
+  static uint32_t pgdir[PAGE_TABLE_LENGTH] __attribute__((aligned(PAGE_SIZE)));
+  memcpy(pgdir, (uint32_t *)proc->ctx.page_dir, sizeof(pgdir));
+
+  // map region in chunks of maximum size equal to that of a page
+  while (size != 0) {
+    const size_t chunk = size >= PAGE_SIZE ? PAGE_SIZE : size;
+
+    // try to allocate a page for the actual data
+    struct page *page = page_alloc();
+    if (page == NULL) goto FAIL_FREE_PAGES;
+    page->next = pages;
+    pages = page;
+
+    // compute page-aligned addresses, both virtual and physical
+    const uint32_t virt = base;
+    const uint32_t real = page->frame * PAGE_SIZE;
+
+    // copy contents if needed
+    if (contents != NULL) {
+      memcpy((void *)real, contents, chunk);
+      contents = (char *)contents + chunk;
+    }
+
+    // we might need to allocate a page table as well
+    int miss = page_map(pgdir, virt, real, flags);
+    if (miss) {
+      // fortunately, it fits exactly in a page
+      struct page *page_tab = page_alloc();
+      if (page_tab == NULL) goto FAIL_FREE_PAGES;
+      page_tab->next = pages;
+      pages = page_tab;
+      // add page directory entry, then try the mapping again (should work now)
+      ptab_map(pgdir, virt, page_tab->frame, flags);
+      miss = page_map(pgdir, virt, real, flags);
+      assert(!miss);
+    }
+
+    base += PAGE_SIZE;
+    size -= chunk;
+  }
+
+  // commit the operation
+  proc->pages = pages;
+  memcpy((uint32_t *)proc->ctx.page_dir, pgdir, sizeof(pgdir));
+
+  return base - 1;
+
+FAIL_FREE_PAGES:
+  while (pages != proc->pages) {
+    struct page *page = pages;
+    pages = page->next;
+    page_free(page);
+  }
+  return 0;
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
@@ -614,53 +662,6 @@ static void idle(void)
 
   // and then exit
   return;
-}
-
-static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
-                            const void *contents, unsigned flags)
-{
-  assert(base % PAGE_SIZE == 0); // assert alignment
-
-  // map region in chunks of maximum size equal to that of a page
-  while (size != 0) {
-    const size_t chunk = size >= PAGE_SIZE ? PAGE_SIZE : size;
-
-    // try to allocate a page for the actual data
-    struct page *page = page_alloc();
-    if (page == NULL) return 0;
-    page->next = proc->pages;
-    proc->pages = page;
-
-    // compute page-aligned addresses, both virtual and physical
-    const uint32_t virt = base;
-    const uint32_t real = page->frame * PAGE_SIZE;
-
-    // copy contents if needed
-    if (contents != NULL) {
-      memcpy((void *)real, contents, chunk);
-      contents = (char *)contents + chunk;
-    }
-
-    // we might need to allocate a page table as well
-    int miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-    if (miss) {
-      // fortunately, it fits exactly in a page
-      struct page *page_tab = page_alloc();
-      if (page_tab == NULL) return 0;
-      page_tab->next = proc->pages;
-      proc->pages = page_tab;
-      // add page directory entry, then try the mapping again (should work now)
-      ptab_map((uint32_t *)proc->ctx.page_dir, virt, page_tab->frame, flags);
-      miss = page_map((uint32_t *)proc->ctx.page_dir, virt, real, flags);
-      assert(!miss);
-    }
-    // NOTE: this is only used before proc runs, so no need to flush TLB
-
-    base += PAGE_SIZE;
-    size -= chunk;
-  }
-
-  return base - 1;
 }
 
 /*

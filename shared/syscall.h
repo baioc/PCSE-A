@@ -33,6 +33,7 @@
 #define NR_shm_create     27
 #define NR_shm_acquire    28
 #define NR_shm_release    29
+#define NR_sbrk           32
 // Syscalls principally used by shell
 #define NR_ps    33
 #define NR_sinfo 34

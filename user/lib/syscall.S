@@ -126,3 +126,6 @@ DEFN_SYSCALL0(sinfo)
 DEFN_SYSCALL1(shm_create)
 DEFN_SYSCALL1(shm_acquire)
 DEFN_SYSCALL1(shm_release)
+
+/* used in malloc */
+DEFN_SYSCALL1(sbrk)

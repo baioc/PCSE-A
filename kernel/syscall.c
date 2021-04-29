@@ -185,6 +185,11 @@ static void sys_shm_release(const char *key)
   shm_release(key);
 }
 
+static void *sys_sbrk(ptrdiff_t increment)
+{
+  return _sbrk(increment);
+}
+
 static void sys_ps()
 {
   ps();
@@ -247,6 +252,7 @@ static const void *syscalls[] = {
     SYSCALL_ENTRY(shm_create),
     SYSCALL_ENTRY(shm_acquire),
     SYSCALL_ENTRY(shm_release),
+    SYSCALL_ENTRY(sbrk),
     SYSCALL_ENTRY(ps),
     SYSCALL_ENTRY(sinfo),
     SYSCALL_ENTRY(pinfo),
