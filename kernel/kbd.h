@@ -8,7 +8,7 @@
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version. 
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,6 +21,11 @@
  */
 #ifndef __KBD_H__
 #define __KBD_H__
+
+#define console_putbytes cons_write /* backward compatibility hack */
+
+/// Enables keyboard interrupts and sets up a redirect to do_scancode().
+void kbd_init(void);
 
 /* Call this function for each scancode received to translate them to
 characters. */

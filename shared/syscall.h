@@ -6,6 +6,8 @@
 
 /// Syscall number to execute, must be in EAX before the interrupt.
 #define NR_cons_write     0
+#define NR_cons_echo      1
+#define NR_cons_read      2
 #define NR_clock_settings 3
 #define NR_current_clock  4
 #define NR_wait_clock     5

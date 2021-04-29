@@ -61,8 +61,14 @@ CFLAGS := -m32 -march=pentium \
 		  -nostdinc \
 		  -nostdlib \
 		  -fno-stack-protector \
-		  -fno-pie -no-pie \
-		  $(DEFS)
+		  -fno-pie
+
+ifeq ($(OS_PCSEA),)
+CFLAGS := $(CFLAGS) -no-pie
+endif
+
+CFLAGS := $(CFLAGS) $(DEFS)
+
 ASFLAGS := -m32 \
 		   -DASSEMBLER \
 		   $(DEFS)
