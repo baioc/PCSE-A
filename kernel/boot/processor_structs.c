@@ -199,19 +199,19 @@ static void setup_pic()
 	outb(0x20, 0x21);
 	outb(0x4, 0x21);
 	outb(0x1, 0x21);
-	
+
 	/* Initialize the slave. */
 	outb(0x11, 0xa0);
 	outb(0x28, 0xa1);
 	outb(0x2, 0xa1);
 	outb(0x1, 0xa1);
-	
+
 	/* Ack any bogus intrs by setting the End Of Interrupt bit. */
 	outb(0x20, 0x20);
 	outb(0x20, 0xa0);
-	
-	/* Disable all IRQs */
-	outb(0xff, 0x21);
+
+	/* Disable all IRQs, except master's line 2, which connects to slave PIC */
+	outb(0xfb, 0x21);
 	outb(0xff, 0xa1);
 }
 

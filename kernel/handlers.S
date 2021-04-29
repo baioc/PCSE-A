@@ -77,6 +77,7 @@ FUNCTION##_handler:                                                          \
 	iret
 
 DEFINE_INTERRUPT_HANDLER(clock_tick) /* clock.c */
+DEFINE_INTERRUPT_HANDLER(mouse_interrupt) /* console.c */
 
 /* XXX: these may push an error code into the stack, but since we only handle
 faults to terminate a process, we don't need to worry about popping the error
