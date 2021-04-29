@@ -290,6 +290,48 @@ void mq_process_chprio(struct proc *p)
   }
 }
 
+/*
+ * Display the following information about all existing mesage_queues:
+ *    - their id
+ *    - waiting for messages processes (pid and name)
+ *    - waiting for sending messages processes (pid and name)
+ *    - buffer space
+ */
+void pinfo()
+{
+  for (int i = 0; i < NBQUEUE; i++) {
+    if (!queue_tab[i].in_use) continue;
+
+    struct message_queue *mq = queue_tab + i;
+
+    printf("--Message queue %d--\n", mq->fid);
+
+    if (queue_empty(&mq->waiting_to_receive)) {
+      printf("\t* No processes waiting for a message\n");
+    } else {
+      printf("\t* Processes waiting for a message\n");
+      proc *p;
+      queue_for_each(p, &mq->waiting_to_receive, proc, node)
+      {
+        printf("\t- pid: %d, name:%s\n", p->pid, p->name);
+      }
+    }
+
+    if (queue_empty(&mq->waiting_to_send)) {
+      printf("\t* No processes waiting for sending a message\n");
+    } else {
+      printf("\t* Processes waiting for sending a message\n");
+      proc *p;
+      queue_for_each(p, &mq->waiting_to_send, proc, node)
+      {
+        printf("\t- pid: %d, name:%s\n", p->pid, p->name);
+      }
+    }
+
+    printf("\t* Buffer capacity : %d\n", mq->lenght);
+  }
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/

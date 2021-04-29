@@ -1,12 +1,15 @@
 #include "stdio.h"
 #include "process.h"
 #include "sem.h"
+#include "mqueue.h"
+#include "shm.h"
 
 static void help();
 
-int main(void *arg)
+int main()
 {
-  int init_sid = (int)arg;
+  int *shell_mem = (int *)shm_acquire("shell-mem");
+  int  msg;
   printf("Hey, I'm a shell. Type help for a list of available commands.\n");
   printf("$ ");
 
@@ -28,7 +31,21 @@ int main(void *arg)
   sinfo();
 
   sdelete(sid);
-  sdelete(init_sid);
+  sdelete(shell_mem[0]);
+
+  printf("**pinfo command**\n");
+  pinfo();
+
+  psend(shell_mem[1], 15);
+  pdelete(shell_mem[1]);
+
+  printf("**pinfo command (round 2)**\n");
+  pinfo();
+
+  preceive(shell_mem[2], &msg);
+  pdelete(shell_mem[2]);
+
+  shm_release("shell_mem");
 }
 
 static void help()
@@ -37,5 +54,6 @@ static void help()
   printf("- help:\t\tshow this help\n");
   printf("- ps:\t\tthe list of all created processes\n");
   printf("- sinfo:\tthe list of all created semaphores\n");
+  printf("- pinfo:\t\tthe list of all created message queues\n");
   printf("- exit:\t\texit kernel (and reboot)\n");
 }

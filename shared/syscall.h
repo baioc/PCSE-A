@@ -36,5 +36,6 @@
 // Syscalls principally used by shell
 #define NR_ps    33
 #define NR_sinfo 34
+#define NR_pinfo 35
 
 #endif // _SYSCALL_H_

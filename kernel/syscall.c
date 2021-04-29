@@ -195,6 +195,11 @@ static void sys_sinfo()
   sinfo();
 }
 
+static void sys_pinfo()
+{
+  pinfo();
+}
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -244,6 +249,7 @@ static const void *syscalls[] = {
     SYSCALL_ENTRY(shm_release),
     SYSCALL_ENTRY(ps),
     SYSCALL_ENTRY(sinfo),
+    SYSCALL_ENTRY(pinfo),
 };
 
 /*******************************************************************************

@@ -252,7 +252,7 @@ void sinfo()
 
     printf("--Semaphore %d--\n", sem->sid);
     if (queue_empty(&sem->blocked)) {
-      printf("\t* No waitng processes\n");
+      printf("\t* No waiting processes\n");
     } else {
       printf("\t* Waiting processes\n");
       proc *p;

@@ -109,6 +109,7 @@ DEFN_SYSCALL1(pdelete)
 DEFN_SYSCALL2(preceive)
 DEFN_SYSCALL1(preset)
 DEFN_SYSCALL2(psend)
+DEFN_SYSCALL2(pinfo)
 
 /* sem.h */
 DEFN_SYSCALL1(scount)
