@@ -2,50 +2,44 @@
 #include "process.h"
 #include "sem.h"
 #include "mqueue.h"
-#include "shm.h"
+
+#define CMD_BUFFER_SIZE 256
 
 static void help();
+static void parse_cmd(char *cmd);
 
 int main()
 {
-  int *shell_mem = (int *)shm_acquire("shell-mem");
-  int  msg;
+  char cmd_buffer[CMD_BUFFER_SIZE];
   printf("Hey, I'm a shell. Type help for a list of available commands.\n");
+
   printf("$ ");
+  cons_read(&cmd_buffer, CMD_BUFFER_SIZE);
+  while (strcmp(&cmd_buffer, "exit") != 0) {
+    parse_cmd(&cmd_buffer);
+    cons_read(&cmd_buffer, CMD_BUFFER_SIZE);
+  }
+  printf("exit\n");
+}
 
-  // TODO: Once keyboard is done, we'll use cons_read syscall to get user input
-  // parse that input and then launch the appropriate command. If no internal
-  // command corresponds to that input, then we'll try to start a process
-  // corresponding to that input
-  printf("\nCommands showcase\n");
-
-  printf("**help command\n**");
-  help();
-
-  printf("**ps command**\n");
-  ps();
-
-  int sid = screate(1);
-
-  printf("**sinfo command**\n");
-  sinfo();
-
-  sdelete(sid);
-  sdelete(shell_mem[0]);
-
-  printf("**pinfo command**\n");
-  pinfo();
-
-  psend(shell_mem[1], 15);
-  pdelete(shell_mem[1]);
-
-  printf("**pinfo command (round 2)**\n");
-  pinfo();
-
-  preceive(shell_mem[2], &msg);
-  pdelete(shell_mem[2]);
-
-  shm_release("shell_mem");
+static void parse_cmd(char *cmd)
+{
+  if (strcmp(cmd, "help") == 0) {
+    help();
+  } else if (strcmp(cmd, "ps")) {
+    ps();
+  } else if (strcmp(cmd, "sinfo")) {
+    sinfo();
+  } else if (strcmp(cmd, "pinfo")) {
+    pinfo();
+  } else {
+    // not a known internal command
+    start(const char *name, unsigned long ssize, int prio, void *arg);
+    int pid = start(cmd, 2048, 128, NULL);
+    if (pid < 0) {
+      printf("%s: Unknown command\n", cmd);
+    }
+  }
 }
 
 static void help()
