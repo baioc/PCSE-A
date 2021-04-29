@@ -25,8 +25,7 @@ extern void kbd_interrupt_handler(void);
  * Macros
  ******************************************************************************/
 
-#define PS2_CMND_PORT 0x64
-#define PS2_DATA_PORT 0x60
+#define STDIN_BUFFER_SIZE 21
 
 /*******************************************************************************
  * Types
@@ -36,7 +35,7 @@ extern void kbd_interrupt_handler(void);
  * Internal function declaration
  ******************************************************************************/
 
-static void do_echo(char c, unsigned long index);
+static void do_echo(char c);
 
 /*******************************************************************************
  * Variables
@@ -53,7 +52,7 @@ void kbd_init(void)
 {
   // create "stdin"
   echo = true;
-  stdin = pcreate(1);
+  stdin = pcreate(STDIN_BUFFER_SIZE);
   assert(stdin >= 0);
 
   // setup intr handler and unmask IRQ
@@ -64,21 +63,21 @@ void kbd_init(void)
 // https://wiki.osdev.org/PS/2_Keyboard
 void kbd_interrupt(void)
 {
-  const unsigned code = inb(PS2_DATA_PORT);
+  const unsigned code = inb(0x60);
   acknowledge_interrupt(1);
-  do_scancode(code); // calls keyboard_data() and kbd_leds(), may block
+  do_scancode(code); // calls keyboard_data() and kbd_leds()
 }
 
 void keyboard_data(char *str)
 {
-  // drop characters in case no one is reading
-  int pc;
-  int err = pcount(stdin, &pc);
-  assert(!err);
-  if (pc >= 0) return;
-
-  // otherwise send each individual character to stdin
+  // XXX: as per the spec, we have to store kbd data even if no one is reading
   for (; *str != '\0'; str++) {
+    // drop characters in case the buffer is full (we don't want to block)
+    int count;
+    int err = pcount(stdin, &count);
+    assert(!err);
+    if (count >= STDIN_BUFFER_SIZE) return;
+    // otherwise send each individual character to stdin
     err = psend(stdin, (int)*str);
     assert(!err);
   }
@@ -100,7 +99,7 @@ unsigned long cons_read(char *string, unsigned long length)
 
     // echo if enabled
     const char c = (char)tmp;
-    if (echo) do_echo(c, idx);
+    if (echo) do_echo(c);
 
     // check for special cases
     if (c == '\r')
@@ -122,7 +121,7 @@ void cons_echo(int on)
  * Internal function
  ******************************************************************************/
 
-static void do_echo(char c, unsigned long index)
+static void do_echo(char c)
 {
   if (c == 9 || (c >= 32 && c <= 126))
     printf("%c", c);
@@ -130,8 +129,8 @@ static void do_echo(char c, unsigned long index)
     printf("\n");
   else if (c < 32)
     printf("^%c", 64 + c);
-  else if (c == 127 && index > 0)
-    printf("\b \b"); // NOTE: this doesn't work with line breaks or tabs
+  else if (c == 127)
+    printf("\b \b"); // NOTE: this doesn't work across lines
   else
     return;
 }
