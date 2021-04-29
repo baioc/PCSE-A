@@ -6,15 +6,20 @@
 
 int main(void)
 {
-  int pid, ret;
+  int pid, shell_pid, ret;
   printf(":: reached init\n");
   printf(":: reached target user system\n");
 
   printf(":: starting system shell\n");
-  pid = start("shell", 2048, 1, NULL);
-
   int sid = screate(0);
+
+  shell_pid = start("shell", 2048, 1, (void *)sid);
+
   wait(sid);
 
-  for (;;) waitpid(-1, NULL);
+  // Once the command interpreter has exited it's time to shutdown
+  while (waitpid(-1, NULL) != shell_pid)
+    ;
+
+  exit(0);
 }

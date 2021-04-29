@@ -599,9 +599,21 @@ static void idle(void)
   assert(pid > 0);
   INIT_PROC = &process_table[pid];
 
-  // and then stay idle forever
+  // and then stay idle untill init returns
   sti();
-  for (;;) hlt();
+  while (waitpid(-1, NULL) != pid) {
+    hlt();
+  }
+
+  // destroy all remaining process
+  for(int i = 1; i < NBPROC; i++)
+  {
+          if(process_table[i].state != DEAD)
+                destroy(process_table + i);
+  }
+
+  // and then exit
+  return;
 }
 
 static uint32_t mmap_region(struct proc *proc, uint32_t base, size_t size,
