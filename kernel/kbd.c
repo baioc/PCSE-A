@@ -1,5 +1,5 @@
 /*
- * clock.c
+ * kbd.c
  *
  *  Created on: 09/04/2021
  *      Author: baioc
@@ -10,13 +10,14 @@
  ******************************************************************************/
 
 #include "kbd.h"
+#include "console.h"
 
 #include "interrupts.h"
 #include "cpu.h"
-#include "stdint.h"
-#include "console.h"
-#include "debug.h"
+#include "stdbool.h"
 #include "stdio.h"
+#include "mqueue.h"
+#include "debug.h"
 
 extern void kbd_interrupt_handler(void);
 
@@ -35,55 +36,52 @@ extern void kbd_interrupt_handler(void);
  * Internal function declaration
  ******************************************************************************/
 
+static void do_echo(char c, unsigned long index);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 
- bool echo = true;
+static bool echo;
+static int  stdin; // global message queue
 
 /*******************************************************************************
  * Public function
  ******************************************************************************/
 
-// récupère des caractères, est réveillé par keyboard_data, est appelé par utilisateur
-unsigned long cons_read(char *string, unsigned long length){
-  if(length <= 0){
-    return 0;
-  }
-  char a = string[1];
-  return (int) a;
-}
-
-void cons_echo(int on){
-  if(on == 0 || on == 1){
-    echo = (bool) on;
-  }
-}
-
 void kbd_init(void)
 {
-  // creates the message-queue used to pass the caracters from the keyboard
+  // create "stdin"
+  echo = true;
+  stdin = pcreate(1);
+  assert(stdin >= 0);
 
   // setup intr handler and unmask IRQ
   set_interrupt_handler(INTR_VECTOR_OFFSET + 1, kbd_interrupt_handler, PL_USER);
   mask_irq(1, false);
 }
 
-// gère cons_read et cons_echo, lance aussi printf si cons_echo est actif
+// https://wiki.osdev.org/PS/2_Keyboard
+void kbd_interrupt(void)
+{
+  const unsigned code = inb(PS2_DATA_PORT);
+  acknowledge_interrupt(1);
+  do_scancode(code); // calls keyboard_data() and kbd_leds(), may block
+}
+
 void keyboard_data(char *str)
 {
-  if(echo){
-    int cpt = 0;
-    char c = str[cpt];
-    while(c != '\0'){
-      printf("%c", c);
-      cpt ++;
-      c = str[cpt];
-    }
+  // drop characters in case no one is reading
+  int pc;
+  int err = pcount(stdin, &pc);
+  assert(!err);
+  if (pc >= 0) return;
+
+  // otherwise send each individual character to stdin
+  for (; *str != '\0'; str++) {
+    err = psend(stdin, (int)*str);
+    assert(!err);
   }
-  /*} if(un processus en attente){
-    rempli la file
-  }*/
 }
 
 void kbd_leds(unsigned char leds)
@@ -92,15 +90,48 @@ void kbd_leds(unsigned char leds)
   // TODO
 }
 
-// https://wiki.osdev.org/PS/2_Keyboard
-void kbd_interrupt(void)
+unsigned long cons_read(char *string, unsigned long length)
 {
-  const int scancode = inb(PS2_DATA_PORT);
-  printf(" --[[ %#x ]]-- ", scancode);
-  do_scancode(scancode);
-  acknowledge_interrupt(1);
+  unsigned long idx = 0;
+  while (idx < length) {
+    int       tmp; // int because that's what mqueue uses
+    const int err = preceive(stdin, &tmp);
+    assert(!err);
+
+    // echo if enabled
+    const char c = (char)tmp;
+    if (echo) do_echo(c, idx);
+
+    // check for special cases
+    if (c == '\r')
+      break;
+    else if (c == 127)
+      idx = idx > 0 ? idx - 1 : idx;
+    else
+      string[idx++] = c;
+  }
+  return idx;
+}
+
+void cons_echo(int on)
+{
+  echo = on != 0;
 }
 
 /*******************************************************************************
  * Internal function
  ******************************************************************************/
+
+static void do_echo(char c, unsigned long index)
+{
+  if (c == 9 || (c >= 32 && c <= 126))
+    printf("%c", c);
+  else if (c == '\r')
+    printf("\n");
+  else if (c < 32)
+    printf("^%c", 64 + c);
+  else if (c == 127 && index > 0)
+    printf("\b \b"); // NOTE: this doesn't work with line breaks or tabs
+  else
+    return;
+}

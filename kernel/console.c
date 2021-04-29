@@ -160,7 +160,6 @@ static void traite_car(char c, char cl_bg, char cl_text)
       current_pos_col = 0;
       break;
     default:
-      traite_car('U', cl_bg, cl_text);
       return;
     }
   }
