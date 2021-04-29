@@ -1,4 +1,6 @@
 #include "stdio.h"
+#include "string.h"
+#include "stddef.h"
 #include "process.h"
 #include "sem.h"
 #include "mqueue.h"
@@ -14,10 +16,10 @@ int main()
   printf("Hey, I'm a shell. Type help for a list of available commands.\n");
 
   printf("$ ");
-  cons_read(&cmd_buffer, CMD_BUFFER_SIZE);
-  while (strcmp(&cmd_buffer, "exit") != 0) {
-    parse_cmd(&cmd_buffer);
-    cons_read(&cmd_buffer, CMD_BUFFER_SIZE);
+  cons_read(cmd_buffer, CMD_BUFFER_SIZE);
+  while (strcmp(cmd_buffer, "exit") != 0) {
+    parse_cmd(cmd_buffer);
+    cons_read(cmd_buffer, CMD_BUFFER_SIZE);
   }
   printf("exit\n");
 }
@@ -34,7 +36,6 @@ static void parse_cmd(char *cmd)
     pinfo();
   } else {
     // not a known internal command
-    start(const char *name, unsigned long ssize, int prio, void *arg);
     int pid = start(cmd, 2048, 128, NULL);
     if (pid < 0) {
       printf("%s: Unknown command\n", cmd);
