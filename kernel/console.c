@@ -86,10 +86,10 @@ static struct {
 void console_init(void)
 {
   efface_ecran();
-  printf(":: reached kernel start \n");
+  printf(":: reached kernel start\n");
 
   // PS2 reference: https://wiki.osdev.org/%228042%22_PS/2_Controller
-  printf(":: configuring PS/2 mouse driver \n");
+  printf(":: configuring PS/2 mouse driver\n");
   // check controller configuration byte
   outb(0x20, PS2_CMND_PORT);
   uint8_t ccb = inb(PS2_DATA_PORT);
@@ -122,12 +122,11 @@ void console_init(void)
   outb(0xD4, PS2_CMND_PORT);
   outb(0xF4, PS2_DATA_PORT);
   if (inb(PS2_DATA_PORT) != 0xFA) goto GIVE_UP;
-  printf("mouse ok\n");
+  printf("mouse (VGA cursor) configuration OK\n");
   mouse_byte = -1; // signal first drop
 
   // cursor interrupt setup
-  // TODO: use INTR_VECTOR_OFFSET instead of 32
-  set_interrupt_handler(32 + 12, mouse_interrupt_handler, PL_USER);
+  set_interrupt_handler(INTR_VECTOR_OFFSET + 12, mouse_interrupt_handler, PL_USER);
   mask_irq(12, false);
 
   return;
