@@ -5,7 +5,7 @@
 
 int main(void)
 {
-  int pid, shell_pid;;
+  int pid, shell_pid;
   printf(":: reached init\n");
 
   printf(":: testing dynamic user heap\n");
@@ -15,11 +15,18 @@ int main(void)
 
   printf(":: reached target user system\n");
   printf(":: starting system shell\n");
-  
-  shell_pid = start("shell", 2048, 1, 0);
+
+  shell_pid = start("shell", 2048, 128, 0);
 
   // Once the command interpreter has exited it's time to shutdown
   while (waitpid(-1, NULL) != shell_pid)
+    ;
+
+  // Wait for remaining children
+  while (waitpid(-1, NULL) > 0)
+    ;
+
+  ps();
 
   return 0;
 }

@@ -88,6 +88,7 @@ FN:;                      \
 DEFN_SYSCALL2(cons_write)
 DEFN_SYSCALL2(cons_read)
 DEFN_SYSCALL1(cons_echo)
+DEFN_SYSCALL0(cons_get_echo)
 
 /* clock.h */
 DEFN_SYSCALL2(clock_settings)
@@ -103,6 +104,7 @@ DEFN_SYSCALL1(kill)
 DEFN_SYSCALL2(waitpid)
 DEFN_SYSCALL1(exit)
 DEFN_SYSCALL0(ps)
+DEFN_SYSCALL1(filiate_to_init)
 
 /* mqueue.h */
 DEFN_SYSCALL2(pcount)

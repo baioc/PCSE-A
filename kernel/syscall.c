@@ -216,6 +216,16 @@ static void sys_pinfo()
   pinfo();
 }
 
+static int sys_cons_get_echo()
+{
+  return cons_get_echo();
+}
+
+static void sys_filiate_to_init(int pid)
+{
+  filiate_to_init(pid);
+}
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -269,6 +279,8 @@ static const void *syscalls[] = {
     SYSCALL_ENTRY(ps),
     SYSCALL_ENTRY(sinfo),
     SYSCALL_ENTRY(pinfo),
+    SYSCALL_ENTRY(cons_get_echo),
+    SYSCALL_ENTRY(filiate_to_init),
 };
 
 /*******************************************************************************

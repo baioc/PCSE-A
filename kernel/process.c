@@ -516,15 +516,13 @@ void idle(void)
 
   // and then stay idle untill init returns
   sti();
-  while (waitpid(-1, NULL) != pid) {
+  while (INIT_PROC->state != ZOMBIE) {
     hlt();
   }
 
   // destroy all remaining processes
-  for(int i = 1; i < NBPROC; i++)
-  {
-          if(process_table[i].state != DEAD)
-                destroy(process_table + i);
+  for (int i = 1; i < NBPROC; i++) {
+    if (process_table[i].state != DEAD) destroy(process_table + i);
   }
 
   // and then exit
@@ -540,17 +538,33 @@ void idle(void)
  */
 void ps()
 {
-  printf("PID\tName\tState\t\tParent PID\n");
+  printf("PID\tName\t\tState\t\tParent PID\n");
 
   // For now we simply iterate on process_table
   for (int i = 0; i < NBPROC; i++) {
     if (process_table[i].state == DEAD) continue;
-    printf("%d\t%s\t%-15s\t%d\n",
+    printf("%d\t%-15s\t%-15s\t%d\n",
            process_table[i].pid,
            process_table[i].name,
            get_string_state(process_table[i].state),
            process_table[i].parent == NULL ? -1 : process_table[i].parent->pid);
   }
+}
+
+void filiate_to_init(int pid)
+{
+  struct proc *child;
+  queue_for_each(child, &current_process->children, struct proc, siblings)
+  {
+    if (child->pid == pid) break;
+  }
+
+  // process is not a child of current_process
+  if (&child->siblings == &current_process->children) return;
+
+  queue_del(child, siblings);
+
+  filiate(process_table + pid, INIT_PROC);
 }
 
 struct proc *get_current_process(void)

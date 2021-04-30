@@ -58,4 +58,10 @@ int waitpid(int pid, int *retvalp);
  */
 void ps();
 
+/*
+ * Makes init the new parent of the process referenced by pid
+ * The child process must be a children of current_process
+ */
+void filiate_to_init(int pid);
+
 #endif /* _PROCESS_H_ */
