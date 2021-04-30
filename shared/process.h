@@ -49,4 +49,19 @@ int getpid(void);
  */
 int waitpid(int pid, int *retvalp);
 
+/*
+ * Display the current running processes with the following information :
+ *    - their pid
+ *    - their name
+ *    - their state
+ *    - their parent's pid
+ */
+void ps(void);
+
+/*
+ * Disowns the process identified by the given PID, making it a child of init.
+ * The process being disowned must be a child of the calling process.
+ */
+void disown(int pid);
+
 #endif /* _PROCESS_H_ */

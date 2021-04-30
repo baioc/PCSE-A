@@ -12,7 +12,7 @@ int main(void)
 {
   for (int alloc = TOTAL; alloc > 0; alloc -= CHUNK) {
     const int progress = (100 * (TOTAL - alloc) - 1) / TOTAL + 1;
-    printf("\r[ %3d%% ] brk = %#x", progress, sbrk(0));
+    printf("\r[ %3d%% ] brk = %p", progress, sbrk(0));
     void *test = mem_alloc(CHUNK);
     assert(test != NULL);
   }

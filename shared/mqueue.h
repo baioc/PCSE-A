@@ -58,4 +58,13 @@ int preset(int fid);
  */
 int pcount(int fid, int *count);
 
+/*
+ * Display the following information about all existing mesage_queues:
+ *    - their id
+ *    - processes waiting on receiving messages processes (pid and name)
+ *    - processes waiting on sending messages processes (pid and name)
+ *    - buffer space
+ */
+void pinfo(void);
+
 #endif /* _MQUEUE_H_ */

@@ -237,6 +237,35 @@ void sem_process_chprio(struct proc *p)
   queue_add(p, &list_sem[p->sid].blocked, proc, node, priority);
 }
 
+/*
+ * Display the following information about all existing semaphores:
+ *    - their id
+ *    - waiting processes (pid and name)
+ *    - counter value
+ */
+void sinfo(void)
+{
+  for (int i = 0; i < MAXNBR_SEM; i++) {
+    if (!list_sem[i].in_use) continue;
+
+    struct semaph *sem = list_sem + i;
+
+    printf("-- Semaphore %d --\n", sem->sid);
+    if (queue_empty(&sem->blocked)) {
+      printf("\t* No waiting processes\n");
+    } else {
+      printf("\t* Waiting processes\n");
+      proc *p;
+      queue_for_each(p, &sem->blocked, proc, node)
+      {
+        printf("\t- pid: %d, name:%s\n", p->pid, p->name);
+      }
+    }
+
+    printf("\t* Count value: %d\n", sem->value);
+  }
+}
+
 /*******************************************************************************
  * Internal function
  ******************************************************************************/

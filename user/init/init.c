@@ -2,24 +2,36 @@
 #include "stddef.h"
 #include "debug.h"
 #include "stdio.h"
+#include "clock.h"
+
+static void wait_dot(int n)
+{
+  for (int i = 0; i < n; ++i) {
+    wait_clock(MS_TO_TICKS(1000));
+    printf(".");
+  }
+}
 
 int main(void)
 {
   int pid;
-  printf(":: reached init\n");
 
-  printf(":: testing dynamic user heap\n");
-  pid = start("sbrktest", 0x1B0B, 1, NULL);
-  assert(pid > 0);
-  waitpid(pid, NULL);
+  printf(":: reached target user system ");
+  wait_dot(3);
+  printf("\f");
 
-  printf(":: starting autotest\n");
-  pid = start("autotest", 0x1BAD, 1, NULL);
+  pid = start("shell", 2048, 128, 0);
   assert(pid > 0);
   while (waitpid(-1, NULL) != pid) continue;
 
-  printf(":: reached target user system\n");
-  // TODO: interactive entry point
+  printf("\f");
+  printf(":: shutting down\n");
 
-  for (;;) waitpid(-1, NULL);
+  printf(":: waiting for running tasks to finish\n");
+  ps();
+  while (waitpid(-1, NULL) > 0) continue;
+
+  printf(":: reached target power off ");
+  wait_dot(3);
+  printf("\n");
 }

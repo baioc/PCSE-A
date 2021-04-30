@@ -201,6 +201,26 @@ static void *sys_sbrk(ptrdiff_t increment)
   return _sbrk(increment);
 }
 
+static void sys_ps(void)
+{
+  ps();
+}
+
+static void sys_sinfo(void)
+{
+  sinfo();
+}
+
+static void sys_pinfo(void)
+{
+  pinfo();
+}
+
+static void sys_disown(int pid)
+{
+  disown(pid);
+}
+
 /*******************************************************************************
  * Macros
  ******************************************************************************/
@@ -251,6 +271,10 @@ static const void *syscalls[] = {
     SYSCALL_ENTRY(shm_acquire),
     SYSCALL_ENTRY(shm_release),
     SYSCALL_ENTRY(sbrk),
+    SYSCALL_ENTRY(disown),
+    SYSCALL_ENTRY(ps),
+    SYSCALL_ENTRY(sinfo),
+    SYSCALL_ENTRY(pinfo),
 };
 
 /*******************************************************************************

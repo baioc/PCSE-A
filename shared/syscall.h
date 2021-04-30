@@ -35,6 +35,10 @@
 #define NR_shm_create     27
 #define NR_shm_acquire    28
 #define NR_shm_release    29
-#define NR_sbrk           32
+#define NR_sbrk           30
+#define NR_disown         31
+#define NR_ps             32
+#define NR_sinfo          33
+#define NR_pinfo          34
 
 #endif // _SYSCALL_H_

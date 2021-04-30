@@ -88,6 +88,8 @@ static void zombify(struct proc *proc, int retval);
  */
 static void destroy(struct proc *proc);
 
+static const char *get_string_state(int state);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -512,9 +514,54 @@ void idle(void)
   assert(pid > 0);
   INIT_PROC = &process_table[pid];
 
-  // and then stay idle forever
+  // and then stay idle untill init returns
   sti();
-  for (;;) hlt();
+  do {
+    hlt();
+  } while (INIT_PROC->state != ZOMBIE);
+
+  // manually destroy all remaining processes
+  for (int i = 1; i < NBPROC; i++) {
+    if (process_table[i].state != DEAD) destroy(process_table + i);
+  }
+}
+
+/*
+ * Display the current running processes with the following information:
+ *    - their pid
+ *    - their name
+ *    - their state
+ *    - their parent's pid
+ */
+void ps(void)
+{
+  printf("PID\tName\t\tState\t\tParent PID\n");
+
+  // For now we simply iterate on process_table
+  for (int i = 0; i < NBPROC; i++) {
+    if (process_table[i].state == DEAD) continue;
+    printf("%d\t%-15s\t%-15s\t%d\n",
+           process_table[i].pid,
+           process_table[i].name,
+           get_string_state(process_table[i].state),
+           process_table[i].parent == NULL ? -1 : process_table[i].parent->pid);
+  }
+}
+
+void disown(int pid)
+{
+  struct proc *child;
+  queue_for_each(child, &current_process->children, struct proc, siblings)
+  {
+    if (child->pid == pid) break;
+  }
+
+  // process is not a child of current_process
+  if (&child->siblings == &current_process->children) return;
+
+  queue_del(child, siblings);
+
+  filiate(process_table + pid, INIT_PROC);
 }
 
 struct proc *get_current_process(void)
@@ -646,4 +693,28 @@ static void destroy(struct proc *proc)
   // add it to the free list
   proc->state = DEAD;
   queue_add(proc, &free_procs, struct proc, node, state);
+}
+
+static const char *get_string_state(int state)
+{
+  switch (state) {
+  case DEAD:
+    return "DEAD";
+  case ZOMBIE:
+    return "ZOMBIE";
+  case SLEEPING:
+    return "SLEEPING";
+  case BLOCKED:
+    return "BLOCKED";
+  case AWAITING_CHILD:
+    return "AWAITING_CHILD";
+  case AWAITING_IO:
+    return "AWAITING_IO";
+  case READY:
+    return "READY";
+  case ACTIVE:
+    return "ACTIVE";
+  default:
+    return "UNKNOWN";
+  }
 }

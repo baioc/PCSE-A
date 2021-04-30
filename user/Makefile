@@ -76,7 +76,7 @@ TESTS_OPTIONS := WITH_MSG WITH_SEM CONS_READ_LINE
 include build/tests.mk
 
 ### Import userspace program build toolchain ###
-APPS_NAMES      := init sbrktest
+APPS_NAMES      := init shell sbrktest
 APPS_STD_INC    := $(STDLIB_DIRS)
 APPS_STD_LIB    := $(OUTPUT)/lib$(STDLIB_NAME).a
 APPS_STD_TARGET := $(STDLIB_TARGET)

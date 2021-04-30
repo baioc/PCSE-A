@@ -102,6 +102,8 @@ DEFN_SYSCALL2(chprio)
 DEFN_SYSCALL1(kill)
 DEFN_SYSCALL2(waitpid)
 DEFN_SYSCALL1(exit)
+DEFN_SYSCALL0(ps)
+DEFN_SYSCALL1(disown)
 
 /* mqueue.h */
 DEFN_SYSCALL2(pcount)
@@ -110,6 +112,7 @@ DEFN_SYSCALL1(pdelete)
 DEFN_SYSCALL2(preceive)
 DEFN_SYSCALL1(preset)
 DEFN_SYSCALL2(psend)
+DEFN_SYSCALL2(pinfo)
 
 /* sem.h */
 DEFN_SYSCALL1(scount)
@@ -120,6 +123,7 @@ DEFN_SYSCALL2(signaln)
 DEFN_SYSCALL2(sreset)
 DEFN_SYSCALL1(try_wait)
 DEFN_SYSCALL1(wait)
+DEFN_SYSCALL0(sinfo)
 
 /* smh.h */
 DEFN_SYSCALL1(shm_create)
