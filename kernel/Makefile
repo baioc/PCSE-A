@@ -18,6 +18,17 @@ endif
 
 
 ### Tools ###
+ifeq ($(OS_PCSEA),macOS)
+CC      := i386-pc-elf-gcc
+AS      := i386-pc-elf-gcc
+LD      := i386-pc-elf-ld
+AR      := i386-pc-elf-ar
+OBJCOPY := i386-pc-elf-objcopy
+NM      := i386-pc-elf-nm
+endif
+
+### Tools ###
+ifeq ($(OS_PCSEA),)
 TOOLCHAIN_PREFIX ?=
 CC      := $(TOOLCHAIN_PREFIX)gcc
 AS      := $(TOOLCHAIN_PREFIX)gcc
@@ -25,12 +36,15 @@ LD      ?= $(TOOLCHAIN_PREFIX)ld
 AR      := $(TOOLCHAIN_PREFIX)ar
 OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
 NM      := $(TOOLCHAIN_PREFIX)nm
+endif
+
 DEP     := $(CC)
 MKDIR   := mkdir
 CP      := cp
 ECHO    ?= echo
 GEN_SECTIONS := build/generate-link-sections.sh
 GEN_TABLE    := build/generate-symbols-table.sh
+
 
 
 ### Override with quiet tools by default
@@ -40,19 +54,26 @@ endif
 
 ### Tools flags ###
 DEFS   := -D__KERNEL__
-CFLAGS := -m32 \
+CFLAGS := -m32 -march=pentium \
 		  -Wall -Wextra -Werror -std=c99 \
-		  -g -gstabs \
+		  -g \
 		  -pipe \
 		  -nostdinc \
 		  -nostdlib \
 		  -fno-stack-protector \
-		  $(DEFS)
+		  -fno-pie
+
+ifeq ($(OS_PCSEA),)
+CFLAGS := $(CFLAGS) -no-pie
+endif
+
+CFLAGS := $(CFLAGS) $(DEFS)
+
 ASFLAGS := -m32 \
 		   -DASSEMBLER \
 		   $(DEFS)
 ARFLAGS := rcs
-LDFLAGS := -melf_i386
+LDFLAGS := -g -melf_i386
 
 # Import facilities
 include build/utils.mk
@@ -87,7 +108,6 @@ include build/kbd-linux.mk
 
 ### Generate object files for userspace binaries ###
 include build/apps-integration.mk
-
 
 ### Generate the kernel, ready to run ###
 kernel.bin: build/kernel.lds $(OBJS) $(SHARED_LIB_TARGET) $(KBD_LINUX_TARGET) $(APPS_OBJS) $(REAL_MODE_TARGET)
@@ -159,4 +179,3 @@ $(OUTPUT):
 .PHONY: clean
 clean:
 	rm -rf $(OUTPUT) kernel.bin cdrom.iso
-

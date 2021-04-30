@@ -115,4 +115,5 @@ __inline__ static unsigned long inl(unsigned short port)
 	return rega;
 }
 
+
 #endif

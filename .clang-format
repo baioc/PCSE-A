@@ -1,0 +1,23 @@
+AlignTrailingComments: true
+AlignEscapedNewlines: Left
+AlignAfterOpenBracket: Align
+BinPackParameters: true
+AllowAllParametersOfDeclarationOnNextLine: true
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: true
+
+PointerAlignment: Right
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterStruct: false
+  AfterUnion: false
+  AfterEnum: false
+  AfterControlStatement: MultiLine
+  AfterFunction: true
+IndentCaseLabels: false
+AlignConsecutiveMacros: true
+SortIncludes: false
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true

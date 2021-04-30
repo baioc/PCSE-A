@@ -74,6 +74,6 @@ int main(void *arg)
         }
 
         shm_release("test22-shm");
-        while(1);
+
         return 0;
 }

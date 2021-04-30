@@ -1,26 +1,66 @@
-#include "debugger.h"
-#include "cpu.h"
+#include "start.h"
 
-int fact(int n)
-{
-	if (n < 2)
-		return 1;
+#include "kbd.h"
+#include "mem.h"
+#include "userspace_apps.h"
+#include "stdio.h"
 
-	return n * fact(n-1);
-}
+/// Initialize console subsystem.
+extern void console_init(void);
+
+/// Initialize the system clock and timer interrupt handles.
+extern void clock_init(void);
+
+/// Starts process management system.
+extern void process_init(void);
+
+/// Starts special idle process, which moves to userspace init.
+extern void idle(void);
+
+/// Initialize syscall handlers.
+extern void syscall_init(void);
+
+/// Initialize message queue management subsystem.
+extern void mq_init(void);
+
+/// Initialize semaphores.
+extern void sem_init(void);
+
+/// Initializes shared memory.
+extern void shm_init(void);
 
 
 void kernel_start(void)
 {
-	int i;
-//	call_debugger();
+  console_init();
 
-	i = 10;
+  printf(":: configuring system timer\n");
+  clock_init();
 
-	i = fact(i);
+  printf(":: initializing page allocator\n");
+  mem_init();
 
-	while(1)
-	  hlt();
+  printf(":: initializing shared memory subsystem\n");
+  shm_init();
 
-	return;
+  printf(":: loading user applications\n");
+  uapps_init();
+
+  printf(":: initializing process scheduler\n");
+  process_init();
+
+  printf(":: initializing message queues \n");
+  mq_init();
+
+  printf(":: initializing semaphores\n");
+  sem_init();
+
+  printf(":: configuring PS/2 keyboard driver\n");
+  kbd_init();
+
+  printf(":: configuring syscall handlers\n");
+  syscall_init();
+
+  printf(":: switching to userspace\n");
+  idle();
 }

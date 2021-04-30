@@ -154,7 +154,7 @@ void copy_client_paging_registers(unsigned long cr0, unsigned long cr3, unsigned
  */
 void gdb_set_trace_flag(int trace_enable, struct gdb_state *inout_state);
 
-int (*gdb_serial_recv)(void);
-void (*gdb_serial_send)(int ch);
+extern int (*gdb_serial_recv)(void);
+extern void (*gdb_serial_send)(int ch);
 
 #endif /*GDB_SERIAL_SUPPORT_H_*/

@@ -5,9 +5,7 @@
 
 #include "sysapi.h"
 
-#define TESTS_NUMBER    23
-
-const char *tests[TESTS_NUMBER] = {
+const char *tests[] = {
         "test0",
         "test1",
         "test2",
@@ -32,6 +30,8 @@ const char *tests[TESTS_NUMBER] = {
         "test21",
         "test22",
 };
+
+#define TESTS_NUMBER ((int)(sizeof(tests) / sizeof(tests[0])))
 
 int main(void)
 {
