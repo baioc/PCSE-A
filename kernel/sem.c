@@ -243,14 +243,14 @@ void sem_process_chprio(struct proc *p)
  *    - waiting processes (pid and name)
  *    - counter value
  */
-void sinfo()
+void sinfo(void)
 {
   for (int i = 0; i < MAXNBR_SEM; i++) {
     if (!list_sem[i].in_use) continue;
 
     struct semaph *sem = list_sem + i;
 
-    printf("--Semaphore %d--\n", sem->sid);
+    printf("-- Semaphore %d --\n", sem->sid);
     if (queue_empty(&sem->blocked)) {
       printf("\t* No waiting processes\n");
     } else {
@@ -262,7 +262,7 @@ void sinfo()
       }
     }
 
-    printf("\t* Count value : %d\n", sem->value);
+    printf("\t* Count value: %d\n", sem->value);
   }
 }
 

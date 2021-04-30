@@ -297,14 +297,14 @@ void mq_process_chprio(struct proc *p)
  *    - waiting for sending messages processes (pid and name)
  *    - buffer space
  */
-void pinfo()
+void pinfo(void)
 {
   for (int i = 0; i < NBQUEUE; i++) {
     if (!queue_tab[i].in_use) continue;
 
     struct message_queue *mq = queue_tab + i;
 
-    printf("--Message queue %d--\n", mq->fid);
+    printf("-- Message queue %d --\n", mq->fid);
 
     if (queue_empty(&mq->waiting_to_receive)) {
       printf("\t* No processes waiting for a message\n");

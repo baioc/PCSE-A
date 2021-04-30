@@ -536,7 +536,7 @@ void idle(void)
  *    - their state
  *    - their parent's pid
  */
-void ps()
+void ps(void)
 {
   printf("PID\tName\t\tState\t\tParent PID\n");
 
@@ -551,7 +551,7 @@ void ps()
   }
 }
 
-void filiate_to_init(int pid)
+void disown(int pid)
 {
   struct proc *child;
   queue_for_each(child, &current_process->children, struct proc, siblings)

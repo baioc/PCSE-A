@@ -103,7 +103,7 @@ DEFN_SYSCALL1(kill)
 DEFN_SYSCALL2(waitpid)
 DEFN_SYSCALL1(exit)
 DEFN_SYSCALL0(ps)
-DEFN_SYSCALL1(filiate_to_init)
+DEFN_SYSCALL1(disown)
 
 /* mqueue.h */
 DEFN_SYSCALL2(pcount)

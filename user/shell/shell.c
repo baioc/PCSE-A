@@ -1,11 +1,12 @@
 #include "stdio.h"
 #include "string.h"
 #include "stddef.h"
+#include "stdbool.h"
+
 #include "process.h"
 #include "sem.h"
 #include "mqueue.h"
 #include "console.h"
-#include "stdbool.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -15,7 +16,7 @@ static void echo();
 
 static bool has_echo;
 
-int main()
+int main(void)
 {
   has_echo = true;
 
@@ -69,7 +70,7 @@ static void parse_cmd(char *cmd)
     if (pid < 0) {
       printf("%s: Unknown command\n", cmd);
     } else if (bg) {
-      filiate_to_init(pid);
+      disown(pid);
     } else {
       waitpid(pid, NULL);
     }

@@ -56,12 +56,12 @@ int waitpid(int pid, int *retvalp);
  *    - their state
  *    - their parent's pid
  */
-void ps();
+void ps(void);
 
 /*
- * Makes init the new parent of the process referenced by pid
- * The child process must be a children of current_process
+ * Disowns the process identified by the given PID, making it a child of init.
+ * The process being disowned must be a child of the calling process.
  */
-void filiate_to_init(int pid);
+void disown(int pid);
 
 #endif /* _PROCESS_H_ */
