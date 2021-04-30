@@ -89,20 +89,6 @@ enable_paging:
 	jmp	*%eax
 0:	ret
 
-/* TODO: Unimplemented functions.
-You have to implement them it in ".c" files. As these symbols are marked as
-"weak", they will no more be used as soon as you write your implementations.
-*/
-	.weak keyboard_data
-keyboard_data:
-	ret
-
-/* Implement this one only if you want to light LEDs in sync with keyboard's
-state. */
-	.weak kbd_leds
-kbd_leds:
-	ret
-
     .org    0x01000
     /* This address will be mapped at kernel_base(0x10000) + 0x1000=0x101000 */
     /* page directory */

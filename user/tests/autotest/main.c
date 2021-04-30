@@ -25,7 +25,7 @@ const char *tests[] = {
         "test16",
         "test17",
         "test18",
-        // "test19", // FIXME
+        "test19",
         "test20",
         "test21",
         "test22",

@@ -75,9 +75,6 @@ extern void     shm_process_destroy(struct proc *proc);
  * Internal function declaration
  ******************************************************************************/
 
-// Starts "init", enables interrupts and loops indefinitely.
-static void idle(void);
-
 // Sets P as the parent of C and adds C to P's children list.
 static void filiate(struct proc *c, struct proc *p);
 
@@ -110,7 +107,7 @@ static struct proc process_table[NBPROC + 1];
 static struct proc *INIT_PROC = NULL;
 
 // Current running process.
-static struct proc *current_process = NULL;
+static struct proc *current_process = IDLE_PROC;
 
 // Process disjoint lists.
 static link ready_procs;
@@ -128,6 +125,8 @@ void process_init(void)
       (struct proc){.pid = 0, .name = "idle", .priority = 0, .parent = NULL};
   IDLE_PROC->children = (link)LIST_HEAD_INIT(IDLE_PROC->children);
   IDLE_PROC->ctx.page_dir = (uint32_t)pgdir;
+  mq_process_init(IDLE_PROC);
+  sem_process_init(IDLE_PROC);
 
   // initialize process lists
   ready_procs = (link)LIST_HEAD_INIT(ready_procs);
@@ -149,7 +148,6 @@ void process_init(void)
   current_process = IDLE_PROC;
   IDLE_PROC->state = ACTIVE;
   IDLE_PROC->time.quantum = 0;
-  idle();
 }
 
 void process_tick(void)
@@ -509,6 +507,52 @@ CHECK_ALARM:
   switch_context((uint32_t *)&pass->ctx, (uint32_t *)&take->ctx);
 }
 
+void idle(void)
+{
+  // idle must start init
+  const int pid = start("init", 4000, MAXPRIO, NULL);
+  assert(pid > 0);
+  INIT_PROC = &process_table[pid];
+
+  // and then stay idle untill init returns
+  sti();
+  while (waitpid(-1, NULL) != pid) {
+    hlt();
+  }
+
+  // destroy all remaining processes
+  for(int i = 1; i < NBPROC; i++)
+  {
+          if(process_table[i].state != DEAD)
+                destroy(process_table + i);
+  }
+
+  // and then exit
+  return;
+}
+
+/*
+ * Display the current running processes with the following information:
+ *    - their pid
+ *    - their name
+ *    - their state
+ *    - their parent's pid
+ */
+void ps()
+{
+  printf("PID\tName\tState\t\tParent PID\n");
+
+  // For now we simply iterate on process_table
+  for (int i = 0; i < NBPROC; i++) {
+    if (process_table[i].state == DEAD) continue;
+    printf("%d\t%s\t%-15s\t%d\n",
+           process_table[i].pid,
+           process_table[i].name,
+           get_string_state(process_table[i].state),
+           process_table[i].parent == NULL ? -1 : process_table[i].parent->pid);
+  }
+}
+
 struct proc *get_current_process(void)
 {
   return current_process;
@@ -638,52 +682,6 @@ static void destroy(struct proc *proc)
   // add it to the free list
   proc->state = DEAD;
   queue_add(proc, &free_procs, struct proc, node, state);
-}
-
-static void idle(void)
-{
-  // idle must start init
-  const int pid = start("init", 4000, MAXPRIO, NULL);
-  assert(pid > 0);
-  INIT_PROC = &process_table[pid];
-
-  // and then stay idle untill init returns
-  sti();
-  while (waitpid(-1, NULL) != pid) {
-    hlt();
-  }
-
-  // destroy all remaining process
-  for(int i = 1; i < NBPROC; i++)
-  {
-          if(process_table[i].state != DEAD)
-                destroy(process_table + i);
-  }
-
-  // and then exit
-  return;
-}
-
-/*
- * Display the current running processes with the following information:
- *    - their pid
- *    - their name
- *    - their state
- *    - their parent's pid
- */
-void ps()
-{
-  printf("PID\tName\tState\t\tParent PID\n");
-
-  // For now we simply iterate on process_table
-  for (int i = 0; i < NBPROC; i++) {
-    if (process_table[i].state == DEAD) continue;
-    printf("%d\t%s\t%-15s\t%d\n",
-           process_table[i].pid,
-           process_table[i].name,
-           get_string_state(process_table[i].state),
-           process_table[i].parent == NULL ? -1 : process_table[i].parent->pid);
-  }
 }
 
 static const char *get_string_state(int state)
