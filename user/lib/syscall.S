@@ -88,7 +88,6 @@ FN:;                      \
 DEFN_SYSCALL2(cons_write)
 DEFN_SYSCALL2(cons_read)
 DEFN_SYSCALL1(cons_echo)
-DEFN_SYSCALL0(cons_get_echo)
 
 /* clock.h */
 DEFN_SYSCALL2(clock_settings)

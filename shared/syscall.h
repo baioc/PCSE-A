@@ -40,7 +40,6 @@
 #define NR_ps              33
 #define NR_sinfo           34
 #define NR_pinfo           35
-#define NR_cons_get_echo   36
 #define NR_filiate_to_init 37
 
 #endif // _SYSCALL_H_

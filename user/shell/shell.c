@@ -5,6 +5,7 @@
 #include "sem.h"
 #include "mqueue.h"
 #include "console.h"
+#include "stdbool.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -12,8 +13,12 @@ static void help();
 static void parse_cmd(char *cmd);
 static void echo();
 
+static bool has_echo;
+
 int main()
 {
+  has_echo = true;
+
   int  nread;
   char cmd_buffer[CMD_BUFFER_SIZE];
   printf("Hey, I'm a shell. Type help for a list of available commands.\n");
@@ -73,14 +78,13 @@ static void parse_cmd(char *cmd)
 
 static void echo()
 {
-  int echo = cons_get_echo();
-  cons_echo(!echo);
-
-  if (echo) {
+  cons_echo(!has_echo);
+  if (has_echo) {
     printf("Echo removed\n");
   } else {
     printf("\nEcho restored\n");
   }
+  has_echo = !has_echo;
 }
 
 static void help()
