@@ -516,17 +516,14 @@ void idle(void)
 
   // and then stay idle untill init returns
   sti();
-  while (INIT_PROC->state != ZOMBIE) {
+  do {
     hlt();
-  }
+  } while (INIT_PROC->state != ZOMBIE);
 
-  // destroy all remaining processes
+  // manually destroy all remaining processes
   for (int i = 1; i < NBPROC; i++) {
     if (process_table[i].state != DEAD) destroy(process_table + i);
   }
-
-  // and then exit
-  return;
 }
 
 /*

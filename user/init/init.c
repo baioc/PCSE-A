@@ -15,23 +15,22 @@ static void wait_dot(int n)
 int main(void)
 {
   int pid;
-  printf(":: reached init\n");
 
   printf(":: reached target user system ");
   wait_dot(3);
   printf("\f");
+
   pid = start("shell", 2048, 128, 0);
   assert(pid > 0);
   while (waitpid(-1, NULL) != pid) continue;
+
   printf("\f");
   printf(":: shutting down\n");
 
-  printf(":: waiting for running tasks to finish ");
-  while (waitpid(-1, NULL) > 0) {
-    printf(".");
-    continue;
-  }
-  printf("\n");
+  printf(":: waiting for running tasks to finish\n");
+  ps();
+  while (waitpid(-1, NULL) > 0) continue;
+
   printf(":: reached target power off ");
   wait_dot(3);
   printf("\n");

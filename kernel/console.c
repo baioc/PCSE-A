@@ -104,23 +104,21 @@ void console_init(void)
   printf("initial PS/2 controller configuration: %#x\n", ccb);
   // enable second device (mouse)
   outb(0xA8, PS2_CMND_PORT);
-  ccb |= 0b00000010;
   // and activate its IRQ
   outb(0x60, PS2_CMND_PORT);
-  outb(ccb, PS2_DATA_PORT);
+  outb(ccb | 0b00000010, PS2_DATA_PORT);
   // test config succeeded
   outb(0x20, PS2_CMND_PORT);
   ccb = inb(PS2_DATA_PORT);
   if (!(ccb & 0b00100010)) goto GIVE_UP;
 
-  // controller self test
+  // controller self test for sanity
   outb(0xAA, PS2_CMND_PORT);
   if (inb(PS2_DATA_PORT) != 0x55) goto GIVE_UP;
-
-  // enable first device
+  // make sure first device (keyboard) is *still* enabled
   outb(0xAE, PS2_CMND_PORT);
 
-  printf("successfully initialized second PS/2 device\n");
+  printf("successfully initialized PS/2 driver\n");
 
   // Mouse ref: https://wiki.osdev.org/Mouse_Input
   // default setup
