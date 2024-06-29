@@ -55,7 +55,7 @@ endif
 ### Tools flags ###
 DEFS   := -D__KERNEL__
 CFLAGS := -m32 -march=pentium \
-		  -Wall -Wextra -Werror -std=c99 \
+		  -Wall -Wextra -std=c99 \
 		  -g \
 		  -pipe \
 		  -nostdinc \

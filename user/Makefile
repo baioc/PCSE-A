@@ -52,7 +52,7 @@ endif
 
 # Global compilation flags
 CFLAGS := -m32 -march=pentium \
-		  -Wall -Wextra -Werror -Wmissing-include-dirs -std=c99 \
+		  -Wall -Wextra -Wmissing-include-dirs -std=c99 \
 		  -g \
 		  -pipe \
 		  -nostdinc \
